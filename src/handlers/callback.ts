@@ -39,9 +39,9 @@ export async function handleCallback(ctx: Context): Promise<void> {
 		return;
 	}
 
-	// 2a. Handle feedback callbacks
-	if (callbackData.startsWith("feedback:")) {
-		await handleFeedbackCallback(ctx, userId, username, callbackData);
+	// 2a. Handle action callbacks (undo/test/commit)
+	if (callbackData.startsWith("action:")) {
+		await handleActionCallback(ctx, userId, username, callbackData);
 		return;
 	}
 
@@ -177,10 +177,10 @@ export async function handleCallback(ctx: Context): Promise<void> {
 }
 
 /**
- * Handle feedback callbacks (👍/👎/重試).
- * Format: feedback:good, feedback:bad, feedback:retry
+ * Handle action callbacks (undo/test/commit).
+ * Format: action:undo, action:test, action:commit
  */
-async function handleFeedbackCallback(
+async function handleActionCallback(
 	ctx: Context,
 	userId: number,
 	username: string,
@@ -188,58 +188,48 @@ async function handleFeedbackCallback(
 ): Promise<void> {
 	const action = callbackData.split(":")[1];
 
-	if (action === "good") {
-		await ctx.answerCallbackQuery({ text: "👍 感謝回饋！" });
-		try {
-			await ctx.deleteMessage();
-		} catch {
-			// Message may have been deleted
-		}
-		await auditLog(userId, username, "FEEDBACK", "good");
-	} else if (action === "bad") {
-		await ctx.answerCallbackQuery({ text: "👎 收到，會改進" });
-		try {
-			await ctx.deleteMessage();
-		} catch {
-			// Message may have been deleted
-		}
-		await auditLog(userId, username, "FEEDBACK", "bad");
-	} else if (action === "retry") {
-		await ctx.answerCallbackQuery({ text: "重新執行上一個請求..." });
-		try {
-			await ctx.deleteMessage();
-		} catch {
-			// Message may have been deleted
-		}
+	// Delete the button message first
+	try {
+		await ctx.deleteMessage();
+	} catch {
+		// Message may have been deleted
+	}
 
-		// Get last user message from session and resend
-		const lastMessage = session.getLastUserMessage();
-		if (lastMessage) {
-			const typing = startTypingIndicator(ctx);
-			const state = new StreamingState();
-			const statusCallback = createStatusCallback(ctx, state);
+	// Map action to Claude command
+	const commandMap: Record<string, string> = {
+		undo: "/undo",
+		test: "run unit tests",
+		commit: "/commit",
+	};
 
-			try {
-				const response = await session.sendMessageStreaming(
-					lastMessage,
-					username,
-					userId,
-					statusCallback,
-					ctx.chat?.id,
-					ctx,
-				);
-				await auditLog(userId, username, "RETRY", lastMessage, response);
-			} catch (error) {
-				console.error("Error retrying:", error);
-				await ctx.reply(`❌ 重試失敗: ${String(error).slice(0, 200)}`);
-			} finally {
-				typing.stop();
-			}
-		} else {
-			await ctx.reply("❌ 沒有可重試的訊息");
-		}
-	} else {
+	const command = commandMap[action || ""];
+	if (!command) {
 		await ctx.answerCallbackQuery({ text: "Unknown action" });
+		return;
+	}
+
+	await ctx.answerCallbackQuery({ text: `執行 ${command}...` });
+
+	// Send the command to Claude
+	const typing = startTypingIndicator(ctx);
+	const state = new StreamingState();
+	const statusCallback = createStatusCallback(ctx, state);
+
+	try {
+		const response = await session.sendMessageStreaming(
+			command,
+			username,
+			userId,
+			statusCallback,
+			ctx.chat?.id,
+			ctx,
+		);
+		await auditLog(userId, username, "ACTION", command, response);
+	} catch (error) {
+		console.error("Error executing action:", error);
+		await ctx.reply(`❌ 執行失敗: ${String(error).slice(0, 200)}`);
+	} finally {
+		typing.stop();
 	}
 }
 

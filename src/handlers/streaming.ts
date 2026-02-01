@@ -231,9 +231,9 @@ export function createStatusCallback(
 
 				// Show action buttons after response completes
 				const actionKeyboard = new InlineKeyboard()
-					.text("👍", "feedback:good")
-					.text("👎", "feedback:bad")
-					.text("🔄 重試", "feedback:retry");
+					.text("↩️ Undo", "action:undo")
+					.text("🧪 Test", "action:test")
+					.text("📝 Commit", "action:commit");
 				await ctx.reply("─", { reply_markup: actionKeyboard });
 			}
 		} catch (error) {
