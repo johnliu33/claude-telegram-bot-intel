@@ -9,12 +9,7 @@ import { ALLOWED_USERS } from "../config";
 import { formatUserError } from "../errors";
 import { checkCommandSafety, isAuthorized, rateLimiter } from "../security";
 import { session } from "../session";
-import {
-	auditLog,
-	auditLogRateLimit,
-	checkInterrupt,
-	startTypingIndicator,
-} from "../utils";
+import { auditLog, auditLogRateLimit, startTypingIndicator } from "../utils";
 import { createStatusCallback, StreamingState } from "./streaming";
 
 /**
@@ -70,8 +65,25 @@ export async function handleText(ctx: Context): Promise<void> {
 		return;
 	}
 
-	// 2. Shell command shortcut: !command requires confirmation
-	if (message.startsWith("!")) {
+	// 2. Interrupt prefix: !! interrupts current query and sends message to Claude
+	if (message.startsWith("!!")) {
+		const interruptMsg = message.slice(2).trim();
+		if (interruptMsg) {
+			// Stop current query if running
+			if (session.isRunning) {
+				console.log("!! prefix - interrupting current query");
+				session.markInterrupt();
+				await session.stop();
+				await Bun.sleep(100); // Small delay for clean interruption
+			}
+			// Continue with the message (will be sent to Claude below)
+			message = interruptMsg;
+		} else {
+			return; // Empty message after !!
+		}
+	}
+	// 3. Shell command shortcut: !command requires confirmation
+	else if (message.startsWith("!")) {
 		const shellCmd = message.slice(1).trim();
 		if (shellCmd) {
 			// Safety check - same as Claude's Bash tool
@@ -101,12 +113,6 @@ export async function handleText(ctx: Context): Promise<void> {
 			await auditLog(userId, username, "SHELL_PENDING", shellCmd);
 			return;
 		}
-	}
-
-	// 3. Check for interrupt prefix
-	message = await checkInterrupt(message);
-	if (!message.trim()) {
-		return;
 	}
 
 	// 3. Rate limit check

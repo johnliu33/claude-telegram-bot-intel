@@ -42,7 +42,8 @@ export async function handleStart(ctx: Context): Promise<void> {
 			`/bookmarks - Manage directory bookmarks\n` +
 			`/restart - Restart the bot\n\n` +
 			`<b>Tips:</b>\n` +
-			`• Prefix with <code>!</code> to interrupt current query\n` +
+			`• <code>!cmd</code> - Run shell command\n` +
+			`• <code>!!msg</code> - Interrupt and send new message\n` +
 			`• Use "think" keyword for extended reasoning\n` +
 			`• Send photos, voice, or documents`,
 		{ parse_mode: "HTML" },

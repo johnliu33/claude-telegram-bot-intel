@@ -50,8 +50,8 @@ bot.use(
 		if (ctx.message?.text?.startsWith("/")) {
 			return undefined;
 		}
-		// Messages with ! prefix bypass queue (interrupt)
-		if (ctx.message?.text?.startsWith("!")) {
+		// Messages with !! prefix bypass queue (interrupt and send to Claude)
+		if (ctx.message?.text?.startsWith("!!")) {
 			return undefined;
 		}
 		// Callback queries (button clicks) are not sequentialized
