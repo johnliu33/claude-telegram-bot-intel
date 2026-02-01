@@ -11,6 +11,7 @@ import { isBookmarked, loadBookmarks, resolvePath } from "../bookmarks";
 import { ALLOWED_USERS, RESTART_FILE } from "../config";
 import { isAuthorized, isPathAllowed } from "../security";
 import { session } from "../session";
+import { startTypingIndicator } from "../utils";
 
 /**
  * /start - Show welcome message and status.
@@ -517,11 +518,22 @@ export async function handleUndo(ctx: Context): Promise<void> {
 		return;
 	}
 
-	const [success, message] = await session.undo();
-	if (success) {
-		await ctx.reply(message, { parse_mode: "HTML" });
-	} else {
-		await ctx.reply(`❌ ${message}`);
+	// Show progress
+	const typing = startTypingIndicator(ctx);
+	const statusMsg = await ctx.reply("⏪ Reverting files...");
+
+	try {
+		const [success, message] = await session.undo();
+
+		// Update status message with result
+		await ctx.api.editMessageText(
+			ctx.chat!.id,
+			statusMsg.message_id,
+			success ? message : `❌ ${message}`,
+			{ parse_mode: "HTML" },
+		);
+	} finally {
+		typing.stop();
 	}
 }
 
