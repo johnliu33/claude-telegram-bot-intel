@@ -262,6 +262,14 @@ Multiple layers protect against misuse:
 5. **Rate limiting** - Prevents runaway usage
 6. **Audit logging** - All interactions logged to `/tmp/claude-telegram-audit.log`
 
+## Reliability Features
+
+- **Debounced session persistence** - Reduces disk I/O by batching session saves
+- **Automatic retry** - Transient Telegram API errors are retried with exponential backoff
+- **Graceful shutdown** - Clean shutdown with timeout ensures session data is saved
+- **Session versioning** - Prevents loading incompatible session data after updates
+- **Friendly errors** - Technical errors are translated to helpful user messages
+
 ## Troubleshooting
 
 **Bot doesn't respond**
