@@ -103,7 +103,9 @@ resume - Resume last session
 stop - Interrupt current query
 status - Check what Claude is doing
 cd - Change working directory
+file - Download a file
 bookmarks - Manage directory bookmarks
+retry - Retry last message
 restart - Restart the bot
 ```
 
@@ -148,16 +150,28 @@ The bot includes a built-in `ask_user` MCP server that lets Claude present optio
 
 ## Bot Commands
 
-| Command      | Description                       |
-| ------------ | --------------------------------- |
-| `/start`     | Show status and your user ID      |
-| `/new`       | Start a fresh session             |
-| `/resume`    | Resume last session after restart |
-| `/stop`      | Interrupt current query           |
-| `/status`    | Check what Claude is doing        |
-| `/cd <path>` | Change working directory          |
-| `/bookmarks` | Manage directory bookmarks        |
-| `/restart`   | Restart the bot                   |
+| Command        | Description                                                |
+| -------------- | ---------------------------------------------------------- |
+| `/start`       | Show status and your user ID                               |
+| `/new`         | Start a fresh session                                      |
+| `/resume`      | Resume last session after restart                          |
+| `/stop`        | Interrupt current query (aliases: `/c`, `/kill`, `/dc`)    |
+| `/status`      | Check what Claude is doing                                 |
+| `/cd <path>`   | Change working directory                                   |
+| `/file [path]` | Download file (auto-detects from last response if no path) |
+| `/bookmarks`   | Manage directory bookmarks                                 |
+| `/retry`       | Retry last message                                         |
+| `/restart`     | Restart the bot                                            |
+
+### Shell Commands
+
+Prefix any message with `!` to run it as a shell command in the working directory:
+
+```
+!ls -la
+!git status
+!pwd
+```
 
 ### Directory Navigation
 
