@@ -38,12 +38,15 @@ To achieve this, I set up a folder with a CLAUDE.md that teaches Claude about me
 # Install globally
 npm install -g ctb
 
+# Show setup tutorial
+ctb tut
+
 # Run in any project directory
 cd ~/my-project
 ctb
 ```
 
-On first run, `ctb` will prompt for your Telegram bot token and allowed user IDs, then optionally save them to `.env`.
+On first run, `ctb` will prompt for your Telegram bot token and allowed user IDs, then optionally save them to `.env`. Run `ctb tut` for a step-by-step setup guide.
 
 **Run multiple instances:** Each project directory gets its own isolated bot session. Open multiple terminals and run `ctb` in different directories.
 
