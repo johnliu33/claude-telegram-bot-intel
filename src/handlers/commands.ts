@@ -9,6 +9,7 @@ import type { Context } from "grammy";
 import { InlineKeyboard, InputFile } from "grammy";
 import { isBookmarked, loadBookmarks, resolvePath } from "../bookmarks";
 import { ALLOWED_USERS, RESTART_FILE } from "../config";
+import { detectFilePaths } from "../formatting";
 import { isAuthorized, isPathAllowed } from "../security";
 import { session } from "../session";
 
@@ -352,7 +353,51 @@ export async function handleCd(ctx: Context): Promise<void> {
 }
 
 /**
+ * Send a single file to the user. Returns error message or null on success.
+ */
+async function sendFile(
+	ctx: Context,
+	filePath: string,
+): Promise<string | null> {
+	// Resolve relative paths from current working directory
+	const resolvedPath = resolvePath(filePath, session.workingDir);
+
+	// Validate path exists
+	if (!existsSync(resolvedPath)) {
+		return `File not found: ${resolvedPath}`;
+	}
+
+	const stats = statSync(resolvedPath);
+	if (stats.isDirectory()) {
+		return `Cannot send directory: ${resolvedPath}`;
+	}
+
+	// Check if path is allowed
+	if (!isPathAllowed(resolvedPath)) {
+		return `Access denied: ${resolvedPath}`;
+	}
+
+	// Check file size (Telegram limit is 50MB for bots)
+	const MAX_FILE_SIZE = 50 * 1024 * 1024;
+	if (stats.size > MAX_FILE_SIZE) {
+		const sizeMB = (stats.size / (1024 * 1024)).toFixed(1);
+		return `File too large: ${resolvedPath} (${sizeMB}MB, max 50MB)`;
+	}
+
+	// Send the file
+	try {
+		const filename = resolvedPath.split("/").pop() || "file";
+		await ctx.replyWithDocument(new InputFile(resolvedPath, filename));
+		return null;
+	} catch (error) {
+		const errMsg = error instanceof Error ? error.message : String(error);
+		return `Failed to send: ${errMsg}`;
+	}
+}
+
+/**
  * /file - Send a file to the user.
+ * Without arguments: auto-detect file paths from last bot response.
  */
 export async function handleFile(ctx: Context): Promise<void> {
 	const userId = ctx.from?.id;
@@ -366,67 +411,67 @@ export async function handleFile(ctx: Context): Promise<void> {
 	const text = ctx.message?.text || "";
 	const match = text.match(/^\/file\s+(.+)$/);
 
+	// If no argument, try to auto-detect from last bot response
 	if (!match) {
-		await ctx.reply(
-			`📎 <b>Download File</b>\n\n` +
-				`Usage: <code>/file &lt;filepath&gt;</code>\n\n` +
-				`Examples:\n` +
-				`• <code>/file output.txt</code> (relative to working dir)\n` +
-				`• <code>/file /absolute/path/file.pdf</code>\n` +
-				`• <code>/file ~/Documents/report.csv</code>`,
-			{ parse_mode: "HTML" },
+		if (!session.lastBotResponse) {
+			await ctx.reply(
+				`📎 <b>Download File</b>\n\n` +
+					`Usage: <code>/file &lt;filepath&gt;</code>\n` +
+					`Or just <code>/file</code> to send files from the last response.\n\n` +
+					`No recent response to extract files from.`,
+				{ parse_mode: "HTML" },
+			);
+			return;
+		}
+
+		// Detect file paths from last response
+		const detected = detectFilePaths(
+			session.lastBotResponse,
+			session.workingDir,
 		);
+
+		if (detected.length === 0) {
+			await ctx.reply(
+				`📎 No file paths found in the last response.\n\n` +
+					`Usage: <code>/file &lt;filepath&gt;</code>`,
+				{ parse_mode: "HTML" },
+			);
+			return;
+		}
+
+		// Send each detected file
+		const errors: string[] = [];
+		let sent = 0;
+		for (const { path: filePath, display } of detected) {
+			const error = await sendFile(ctx, filePath);
+			if (error) {
+				errors.push(`${display}: ${error}`);
+			} else {
+				sent++;
+			}
+		}
+
+		// Report any errors
+		if (errors.length > 0) {
+			await ctx.reply(`⚠️ Some files failed:\n${errors.join("\n")}`, {
+				parse_mode: "HTML",
+			});
+		}
+
+		if (sent === 0 && errors.length > 0) {
+			// All failed, already reported above
+		} else if (sent > 0) {
+			// Success message optional, files speak for themselves
+		}
+
 		return;
 	}
 
+	// Explicit path provided
 	const inputPath = (match[1] ?? "").trim();
-	// Resolve relative paths from current working directory
-	const resolvedPath = resolvePath(inputPath, session.workingDir);
-
-	// Validate path exists
-	if (!existsSync(resolvedPath)) {
-		await ctx.reply(`❌ File not found: <code>${resolvedPath}</code>`, {
-			parse_mode: "HTML",
-		});
-		return;
-	}
-
-	const stats = statSync(resolvedPath);
-	if (stats.isDirectory()) {
-		await ctx.reply(
-			`❌ Cannot preview directory: <code>${resolvedPath}</code>\n\nUse <code>/cd</code> to navigate.`,
-			{ parse_mode: "HTML" },
-		);
-		return;
-	}
-
-	// Check if path is allowed
-	if (!isPathAllowed(resolvedPath)) {
-		await ctx.reply(
-			`❌ Access denied: <code>${resolvedPath}</code>\n\nPath must be in allowed directories.`,
-			{ parse_mode: "HTML" },
-		);
-		return;
-	}
-
-	// Check file size (Telegram limit is 50MB for bots)
-	const MAX_FILE_SIZE = 50 * 1024 * 1024;
-	if (stats.size > MAX_FILE_SIZE) {
-		const sizeMB = (stats.size / (1024 * 1024)).toFixed(1);
-		await ctx.reply(
-			`❌ File too large: <code>${resolvedPath}</code>\n\nSize: ${sizeMB}MB (max 50MB)`,
-			{ parse_mode: "HTML" },
-		);
-		return;
-	}
-
-	// Send the file
-	try {
-		const filename = resolvedPath.split("/").pop() || "file";
-		await ctx.replyWithDocument(new InputFile(resolvedPath, filename));
-	} catch (error) {
-		const errMsg = error instanceof Error ? error.message : String(error);
-		await ctx.reply(`❌ Failed to send file: ${errMsg}`);
+	const error = await sendFile(ctx, inputPath);
+	if (error) {
+		await ctx.reply(`❌ ${error}`, { parse_mode: "HTML" });
 	}
 }
 

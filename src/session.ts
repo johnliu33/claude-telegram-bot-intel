@@ -78,6 +78,7 @@ class ClaudeSession {
 	lastErrorTime: Date | null = null;
 	lastUsage: TokenUsage | null = null;
 	lastMessage: string | null = null;
+	lastBotResponse: string | null = null;
 
 	// Mutable working directory (can be changed with /cd)
 	private _workingDir: string = WORKING_DIR;
@@ -486,7 +487,9 @@ class ClaudeSession {
 
 		await statusCallback("done", "");
 
-		return responseParts.join("") || "No response from Claude.";
+		const finalResponse = responseParts.join("") || "No response from Claude.";
+		this.lastBotResponse = finalResponse;
+		return finalResponse;
 	}
 
 	/**
