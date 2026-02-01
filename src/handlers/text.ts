@@ -5,6 +5,7 @@
 import { spawn } from "node:child_process";
 import type { Context } from "grammy";
 import { ALLOWED_USERS } from "../config";
+import { formatUserError } from "../errors";
 import { isAuthorized, rateLimiter } from "../security";
 import { session } from "../session";
 import {
@@ -194,7 +195,7 @@ export async function handleText(ctx: Context): Promise<void> {
 					await ctx.reply("🛑 Query stopped.");
 				}
 			} else {
-				await ctx.reply(`❌ Error: ${errorStr.slice(0, 200)}`);
+				await ctx.reply(`❌ ${formatUserError(error as Error)}`);
 			}
 			break; // Exit loop after handling error
 		}
