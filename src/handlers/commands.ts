@@ -72,7 +72,24 @@ export async function handleNew(ctx: Context): Promise<void> {
 	// Clear session
 	await session.kill();
 
-	await ctx.reply("🆕 Session cleared. Next message starts fresh.");
+	// Get context info
+	const username = process.env.USER || process.env.USERNAME || "unknown";
+	const workDir = session.workingDir;
+	const now = new Date().toLocaleString("en-US", {
+		weekday: "short",
+		month: "short",
+		day: "numeric",
+		hour: "2-digit",
+		minute: "2-digit",
+	});
+
+	await ctx.reply(
+		`🆕 Session cleared. Next message starts fresh.\n\n` +
+			`👤 ${username}\n` +
+			`📁 <code>${workDir}</code>\n` +
+			`🕐 ${now}`,
+		{ parse_mode: "HTML" },
+	);
 }
 
 /**
