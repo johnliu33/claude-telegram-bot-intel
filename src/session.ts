@@ -8,6 +8,7 @@
 import { readFileSync } from "node:fs";
 import {
 	type Options,
+	type Query,
 	query,
 	type SDKMessage,
 } from "@anthropic-ai/claude-agent-sdk";
@@ -90,6 +91,10 @@ class ClaudeSession {
 	totalInputTokens = 0;
 	totalOutputTokens = 0;
 	totalCacheReadTokens = 0;
+
+	// File checkpointing for /undo
+	private _queryInstance: Query | null = null;
+	private _userMessageUuids: string[] = [];
 
 	// Mutable working directory (can be changed with /cd)
 	private _workingDir: string = WORKING_DIR;
@@ -256,6 +261,7 @@ class ClaudeSession {
 			maxThinkingTokens: thinkingTokens,
 			additionalDirectories: ALLOWED_PATHS,
 			resume: this.sessionId || undefined,
+			enableFileCheckpointing: true, // Enable /undo support
 		};
 
 		// Add Claude Code executable path if set (required for standalone builds)
@@ -309,6 +315,9 @@ class ClaudeSession {
 				},
 			});
 
+			// Store query instance for /undo support
+			this._queryInstance = queryInstance;
+
 			// Process streaming response
 			for await (const event of queryInstance) {
 				// Check for abort
@@ -334,6 +343,12 @@ class ClaudeSession {
 					this.sessionId = event.session_id;
 					console.log(`GOT session_id: ${this.sessionId.slice(0, 8)}...`);
 					this.saveSession();
+				}
+
+				// Capture user message UUIDs for /undo checkpoints
+				if (event.type === "user" && event.uuid) {
+					this._userMessageUuids.push(event.uuid);
+					console.log(`Checkpoint: user message ${event.uuid.slice(0, 8)}...`);
 				}
 
 				// Handle different message types
@@ -536,7 +551,60 @@ class ClaudeSession {
 		// Reset modes
 		this.planMode = false;
 		this.forceThinking = null;
+		// Reset checkpoints
+		this._queryInstance = null;
+		this._userMessageUuids = [];
 		console.log("Session cleared");
+	}
+
+	/**
+	 * Check if undo is available (has checkpoints).
+	 */
+	get canUndo(): boolean {
+		return this._queryInstance !== null && this._userMessageUuids.length > 0;
+	}
+
+	/**
+	 * Get number of available undo checkpoints.
+	 */
+	get undoCheckpoints(): number {
+		return this._userMessageUuids.length;
+	}
+
+	/**
+	 * Undo file changes by rewinding to the last user message checkpoint.
+	 * Returns [success, message].
+	 */
+	async undo(): Promise<[boolean, string]> {
+		if (!this._queryInstance) {
+			return [false, "No active session to undo"];
+		}
+
+		if (this._userMessageUuids.length === 0) {
+			return [false, "No checkpoints available"];
+		}
+
+		// Get and remove the last user message UUID
+		const targetUuid = this._userMessageUuids.pop();
+		if (!targetUuid) {
+			return [false, "No checkpoints available"];
+		}
+
+		try {
+			console.log(`Rewinding files to checkpoint ${targetUuid.slice(0, 8)}...`);
+			await this._queryInstance.rewindFiles(targetUuid);
+
+			const remaining = this._userMessageUuids.length;
+			return [
+				true,
+				`✅ Reverted file changes to checkpoint \`${targetUuid.slice(0, 8)}...\`\n${remaining} checkpoint${remaining !== 1 ? "s" : ""} remaining`,
+			];
+		} catch (error) {
+			// Restore the checkpoint on failure
+			this._userMessageUuids.push(targetUuid);
+			console.error(`Undo failed: ${error}`);
+			return [false, `Failed to undo: ${error}`];
+		}
 	}
 
 	/**

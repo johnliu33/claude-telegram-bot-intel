@@ -35,6 +35,7 @@ import {
 	handleStop,
 	handleText,
 	handleThink,
+	handleUndo,
 	handleVoice,
 } from "./handlers";
 
@@ -82,6 +83,7 @@ bot.command("cost", handleCost);
 bot.command("think", handleThink);
 bot.command("plan", handlePlan);
 bot.command("compact", handleCompact);
+bot.command("undo", handleUndo);
 bot.command("bookmarks", handleBookmarks);
 
 // ============== Message Handlers ==============
@@ -133,6 +135,7 @@ await bot.api.setMyCommands([
 	{ command: "think", description: "Force extended thinking" },
 	{ command: "plan", description: "Toggle planning mode" },
 	{ command: "compact", description: "Trigger context compaction" },
+	{ command: "undo", description: "Revert file changes" },
 	{ command: "cd", description: "Change working directory" },
 	{ command: "skill", description: "Invoke a Claude Code skill" },
 	{ command: "file", description: "Download a file" },

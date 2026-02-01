@@ -162,6 +162,7 @@ The bot includes a built-in `ask_user` MCP server that lets Claude present optio
 | `/think [lvl]`  | Force thinking: off, normal, deep (default)                |
 | `/plan`         | Toggle planning mode (no tool execution)                   |
 | `/compact`      | Trigger context compaction                                 |
+| `/undo`         | Revert file changes to last checkpoint                     |
 | `/cd <path>`    | Change working directory                                   |
 | `/skill <name>` | Invoke a Claude Code skill (e.g., `/skill commit`)         |
 | `/file [path]`  | Download file (auto-detects from last response if no path) |

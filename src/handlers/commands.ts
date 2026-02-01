@@ -494,6 +494,38 @@ export async function handleCompact(ctx: Context): Promise<void> {
 }
 
 /**
+ * /undo - Revert file changes to last checkpoint.
+ */
+export async function handleUndo(ctx: Context): Promise<void> {
+	const userId = ctx.from?.id;
+
+	if (!isAuthorized(userId, ALLOWED_USERS)) {
+		await ctx.reply("Unauthorized.");
+		return;
+	}
+
+	if (!session.isActive) {
+		await ctx.reply("❌ No active session.");
+		return;
+	}
+
+	if (!session.canUndo) {
+		await ctx.reply(
+			`❌ No checkpoints available.\n\n` +
+				`Checkpoints are created when you send messages.`,
+		);
+		return;
+	}
+
+	const [success, message] = await session.undo();
+	if (success) {
+		await ctx.reply(message, { parse_mode: "HTML" });
+	} else {
+		await ctx.reply(`❌ ${message}`);
+	}
+}
+
+/**
  * /cd - Change working directory.
  */
 export async function handleCd(ctx: Context): Promise<void> {

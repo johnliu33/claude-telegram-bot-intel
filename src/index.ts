@@ -34,6 +34,7 @@ import {
 	handleStop,
 	handleText,
 	handleThink,
+	handleUndo,
 	handleVoice,
 } from "./handlers";
 
@@ -81,6 +82,7 @@ bot.command("cost", handleCost);
 bot.command("think", handleThink);
 bot.command("plan", handlePlan);
 bot.command("compact", handleCompact);
+bot.command("undo", handleUndo);
 bot.command("bookmarks", handleBookmarks);
 
 // ============== Message Handlers ==============

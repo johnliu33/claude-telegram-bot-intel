@@ -369,4 +369,31 @@ describe("ClaudeSession", () => {
 			expect(session.isRunning).toBe(false);
 		});
 	});
+
+	describe("undo/checkpointing", () => {
+		test("canUndo is false by default", () => {
+			expect(session.canUndo).toBe(false);
+		});
+
+		test("undoCheckpoints is 0 by default", () => {
+			expect(session.undoCheckpoints).toBe(0);
+		});
+
+		test("undo fails when no session active", async () => {
+			const [success, message] = await session.undo();
+			expect(success).toBe(false);
+			expect(message).toContain("No active session");
+		});
+
+		test("kill resets checkpoints", async () => {
+			// Simulate having checkpoints (by accessing private property for testing)
+			// @ts-expect-error - accessing private for test
+			session._userMessageUuids = ["uuid1", "uuid2"];
+			expect(session.undoCheckpoints).toBe(2);
+
+			await session.kill();
+			expect(session.undoCheckpoints).toBe(0);
+			expect(session.canUndo).toBe(false);
+		});
+	});
 });

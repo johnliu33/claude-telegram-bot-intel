@@ -20,6 +20,7 @@ export {
 	handleStatus,
 	handleStop,
 	handleThink,
+	handleUndo,
 } from "./commands";
 export { handleDocument } from "./document";
 export { handlePhoto } from "./photo";
