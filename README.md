@@ -105,7 +105,14 @@ new - Start a fresh session
 resume - Resume last session
 stop - Interrupt current query
 status - Check what Claude is doing
+model - Switch model (sonnet, opus, haiku)
+cost - Show token usage and estimated cost
+think - Force thinking mode
+plan - Toggle planning mode
+compact - Trigger context compaction
+undo - Revert file changes to last checkpoint
 cd - Change working directory
+skill - Invoke a Claude Code skill
 file - Download a file
 bookmarks - Manage directory bookmarks
 retry - Retry last message
