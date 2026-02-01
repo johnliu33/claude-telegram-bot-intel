@@ -9,7 +9,6 @@ import type { Context } from "grammy";
 import { InlineKeyboard, InputFile } from "grammy";
 import { isBookmarked, loadBookmarks, resolvePath } from "../bookmarks";
 import { ALLOWED_USERS, RESTART_FILE } from "../config";
-import { detectFilePaths } from "../formatting";
 import { isAuthorized, isPathAllowed } from "../security";
 import { session } from "../session";
 
@@ -424,15 +423,25 @@ export async function handleFile(ctx: Context): Promise<void> {
 			return;
 		}
 
-		// Detect file paths from last response
-		const detected = detectFilePaths(
-			session.lastBotResponse,
-			session.workingDir,
+		// Extract paths from <code> tags (response is HTML)
+		const codeMatches = session.lastBotResponse.matchAll(
+			/<code>([^<]+)<\/code>/g,
 		);
+		const candidates: string[] = [];
+		for (const m of codeMatches) {
+			const content = m[1]?.trim();
+			// Must have file extension (contains . followed by letters)
+			if (content && /\.[a-zA-Z0-9]+$/.test(content)) {
+				candidates.push(content);
+			}
+		}
+
+		// Deduplicate
+		const detected = [...new Set(candidates)];
 
 		if (detected.length === 0) {
 			await ctx.reply(
-				`📎 No file paths found in the last response.\n\n` +
+				`📎 No file paths found in <code>&lt;code&gt;</code> tags.\n\n` +
 					`Usage: <code>/file &lt;filepath&gt;</code>`,
 				{ parse_mode: "HTML" },
 			);
@@ -442,10 +451,10 @@ export async function handleFile(ctx: Context): Promise<void> {
 		// Send each detected file
 		const errors: string[] = [];
 		let sent = 0;
-		for (const { path: filePath, display } of detected) {
+		for (const filePath of detected) {
 			const error = await sendFile(ctx, filePath);
 			if (error) {
-				errors.push(`${display}: ${error}`);
+				errors.push(`${filePath}: ${error}`);
 			} else {
 				sent++;
 			}
