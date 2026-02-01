@@ -15,6 +15,7 @@ import {
 import type { Context } from "grammy";
 import {
 	ALLOWED_PATHS,
+	MAX_CONCURRENT_QUERIES,
 	MCP_SERVERS,
 	QUERY_TIMEOUT_MS,
 	SAFETY_PROMPT,
@@ -23,6 +24,7 @@ import {
 	TEMP_PATHS,
 	THINKING_DEEP_KEYWORDS,
 	THINKING_KEYWORDS,
+	TIMEOUT_PROMPT_WAIT_MS,
 	WORKING_DIR,
 } from "./config";
 import { botEvents } from "./events";
@@ -113,6 +115,20 @@ class ClaudeSession {
 	private _isProcessing = false;
 	private _wasInterruptedByNewMessage = false;
 
+	// Concurrent query tracking
+	private static _activeQueries = 0;
+
+	// Timeout check state
+	private _lastTimeoutCheck = 0;
+	private _timeoutResponse: "continue" | "abort" | null = null;
+
+	/**
+	 * Set the user's response to a timeout check prompt.
+	 */
+	setTimeoutResponse(response: "continue" | "abort"): void {
+		this._timeoutResponse = response;
+	}
+
 	constructor() {
 		botEvents.on("interruptRequested", () => {
 			if (this.isRunning) {
@@ -143,6 +159,13 @@ class ClaudeSession {
 
 	get isRunning(): boolean {
 		return this.isQueryRunning || this._isProcessing;
+	}
+
+	/**
+	 * Get current number of active queries across all sessions.
+	 */
+	static get activeQueryCount(): number {
+		return ClaudeSession._activeQueries;
 	}
 
 	/**
@@ -307,13 +330,26 @@ class ClaudeSession {
 			throw new Error("Query cancelled");
 		}
 
+		// Check concurrent query limit
+		if (ClaudeSession._activeQueries >= MAX_CONCURRENT_QUERIES) {
+			console.warn(
+				`Concurrent query limit reached (${ClaudeSession._activeQueries}/${MAX_CONCURRENT_QUERIES})`,
+			);
+			throw new Error(
+				`Server busy: ${ClaudeSession._activeQueries} queries running. Please wait.`,
+			);
+		}
+
 		// Create abort controller for cancellation
 		this.abortController = new AbortController();
 		this.isQueryRunning = true;
+		ClaudeSession._activeQueries++;
 		botEvents.emit("sessionRunning", true);
 		this.stopRequested = false;
 		this.queryStarted = new Date();
 		this.currentTool = null;
+		this._lastTimeoutCheck = Date.now(); // Reset timeout check
+		this._timeoutResponse = null;
 
 		// Response tracking
 		const responseParts: string[] = [];
@@ -344,16 +380,52 @@ class ClaudeSession {
 					break;
 				}
 
-				// Check for timeout
+				// Check for timeout - prompt user every QUERY_TIMEOUT_MS
 				const elapsed = this.queryStarted
 					? Date.now() - this.queryStarted.getTime()
 					: 0;
-				if (elapsed > QUERY_TIMEOUT_MS) {
-					console.warn(`Query timeout after ${elapsed}ms`);
-					this.abortController?.abort();
-					throw new Error(
-						`Query timeout (${Math.round(elapsed / 1000)}s > ${Math.round(QUERY_TIMEOUT_MS / 1000)}s limit)`,
+				const timeSinceLastCheck = Date.now() - this._lastTimeoutCheck;
+
+				// Check if we've hit a timeout interval (3 min, 6 min, 9 min, etc.)
+				if (
+					elapsed > QUERY_TIMEOUT_MS &&
+					timeSinceLastCheck > QUERY_TIMEOUT_MS
+				) {
+					this._lastTimeoutCheck = Date.now();
+					this._timeoutResponse = null;
+
+					const minutes = Math.round(elapsed / 60000);
+					console.log(`Query running for ${minutes} minutes, prompting user`);
+
+					// Send timeout check prompt to user
+					await statusCallback(
+						"timeout_check",
+						`⏱️ 已運作 ${minutes} 分鐘，要中斷嗎？`,
 					);
+
+					// Wait for user response (with timeout)
+					const waitStart = Date.now();
+					while (Date.now() - waitStart < TIMEOUT_PROMPT_WAIT_MS) {
+						if (this._timeoutResponse === "abort") {
+							console.log("User chose to abort query");
+							this.abortController?.abort();
+							throw new Error("Query cancelled by user");
+						}
+						if (this._timeoutResponse === "continue") {
+							console.log("User chose to continue query");
+							break;
+						}
+						if (this.stopRequested) {
+							break; // Exit wait loop if stop requested
+						}
+						await new Promise((resolve) => setTimeout(resolve, 500));
+					}
+
+					// If no response, continue automatically
+					if (this._timeoutResponse === null) {
+						console.log("No user response, continuing automatically");
+					}
+					this._timeoutResponse = null;
 				}
 
 				// Capture session_id from first message
@@ -529,6 +601,10 @@ class ClaudeSession {
 			}
 		} finally {
 			this.isQueryRunning = false;
+			ClaudeSession._activeQueries = Math.max(
+				0,
+				ClaudeSession._activeQueries - 1,
+			);
 			botEvents.emit("sessionRunning", false);
 			this.abortController = null;
 			this.queryStarted = null;

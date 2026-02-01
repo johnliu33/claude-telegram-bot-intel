@@ -9,6 +9,8 @@ import type { Chat } from "grammy/types";
 import OpenAI from "openai";
 import {
 	AUDIT_LOG_JSON,
+	AUDIT_LOG_MAX_FILES,
+	AUDIT_LOG_MAX_SIZE,
 	AUDIT_LOG_PATH,
 	OPENAI_API_KEY,
 	TRANSCRIPTION_AVAILABLE,
@@ -26,8 +28,59 @@ if (OPENAI_API_KEY && TRANSCRIPTION_AVAILABLE) {
 
 // ============== Audit Logging ==============
 
+// Track last rotation check time to avoid checking on every write
+let lastRotationCheck = 0;
+const ROTATION_CHECK_INTERVAL_MS = 60_000; // Check every minute
+
+/**
+ * Rotate audit log if it exceeds max size.
+ * Keeps up to AUDIT_LOG_MAX_FILES rotated files (.log.1, .log.2, etc.)
+ */
+async function rotateAuditLogIfNeeded(): Promise<void> {
+	const now = Date.now();
+	if (now - lastRotationCheck < ROTATION_CHECK_INTERVAL_MS) {
+		return; // Skip check if we checked recently
+	}
+	lastRotationCheck = now;
+
+	try {
+		const fs = await import("fs/promises");
+		const stats = await fs.stat(AUDIT_LOG_PATH).catch(() => null);
+
+		if (!stats || stats.size < AUDIT_LOG_MAX_SIZE) {
+			return; // File doesn't exist or is under limit
+		}
+
+		console.log(
+			`Rotating audit log (${(stats.size / 1024 / 1024).toFixed(1)}MB > ${(AUDIT_LOG_MAX_SIZE / 1024 / 1024).toFixed(1)}MB limit)`,
+		);
+
+		// Rotate existing files: .log.2 -> .log.3, .log.1 -> .log.2, etc.
+		for (let i = AUDIT_LOG_MAX_FILES - 1; i >= 1; i--) {
+			const oldPath = i === 1 ? AUDIT_LOG_PATH : `${AUDIT_LOG_PATH}.${i - 1}`;
+			const newPath = `${AUDIT_LOG_PATH}.${i}`;
+			try {
+				await fs.rename(oldPath, newPath);
+			} catch {
+				// File doesn't exist, skip
+			}
+		}
+
+		// Delete oldest file if it exceeds max files
+		const oldestPath = `${AUDIT_LOG_PATH}.${AUDIT_LOG_MAX_FILES}`;
+		await fs.unlink(oldestPath).catch(() => {});
+
+		console.log("Audit log rotated successfully");
+	} catch (error) {
+		console.error("Failed to rotate audit log:", error);
+	}
+}
+
 async function writeAuditLog(event: AuditEvent): Promise<void> {
 	try {
+		// Check if rotation is needed (throttled)
+		await rotateAuditLogIfNeeded();
+
 		let content: string;
 		if (AUDIT_LOG_JSON) {
 			content = JSON.stringify(event) + "\n";

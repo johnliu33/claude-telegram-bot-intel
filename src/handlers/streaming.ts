@@ -210,6 +210,15 @@ export function createStatusCallback(
 						}
 					}
 				}
+			} else if (statusType === "timeout_check") {
+				// Show timeout prompt with inline keyboard
+				const keyboard = new InlineKeyboard()
+					.text("✋ 中斷", "timeout:abort")
+					.text("▶️ 繼續", "timeout:continue");
+				const timeoutMsg = await ctx.reply(content, {
+					reply_markup: keyboard,
+				});
+				state.toolMessages.push(timeoutMsg); // Will be deleted when done
 			} else if (statusType === "done") {
 				// Delete tool messages - text messages stay
 				for (const toolMsg of state.toolMessages) {

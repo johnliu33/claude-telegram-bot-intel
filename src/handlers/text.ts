@@ -6,7 +6,7 @@ import { spawn } from "node:child_process";
 import type { Context } from "grammy";
 import { ALLOWED_USERS } from "../config";
 import { formatUserError } from "../errors";
-import { isAuthorized, rateLimiter } from "../security";
+import { checkCommandSafety, isAuthorized, rateLimiter } from "../security";
 import { session } from "../session";
 import {
 	auditLog,
@@ -73,6 +73,14 @@ export async function handleText(ctx: Context): Promise<void> {
 	if (message.startsWith("!")) {
 		const shellCmd = message.slice(1).trim();
 		if (shellCmd) {
+			// Safety check - same as Claude's Bash tool
+			const [isSafe, reason] = checkCommandSafety(shellCmd);
+			if (!isSafe) {
+				await ctx.reply(`🚫 Command blocked: ${reason}`);
+				await auditLog(userId, username, "SHELL_BLOCKED", shellCmd, reason);
+				return;
+			}
+
 			const cwd = session.workingDir;
 			await ctx.reply(
 				`⚡ Running in <code>${cwd}</code>:\n<code>${shellCmd}</code>`,

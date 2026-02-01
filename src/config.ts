@@ -145,8 +145,18 @@ export const BLOCKED_PATTERNS = [
 	"dd if=",
 ];
 
-// Query timeout (3 minutes)
+// Query timeout interval (3 minutes) - prompts user to continue or abort
 export const QUERY_TIMEOUT_MS = 180_000;
+
+// Timeout for user to respond to "continue?" prompt (30 seconds)
+// If no response, query continues automatically
+export const TIMEOUT_PROMPT_WAIT_MS = 30_000;
+
+// Maximum concurrent queries (prevents resource exhaustion)
+export const MAX_CONCURRENT_QUERIES = parseInt(
+	process.env.MAX_CONCURRENT_QUERIES || "3",
+	10,
+);
 
 // ============== Voice Transcription ==============
 
@@ -193,6 +203,17 @@ export const AUDIT_LOG_PATH =
 	process.env.AUDIT_LOG_PATH || "/tmp/claude-telegram-audit.log";
 export const AUDIT_LOG_JSON =
 	(process.env.AUDIT_LOG_JSON || "false").toLowerCase() === "true";
+
+// Audit log rotation: max size in bytes (default 10MB)
+export const AUDIT_LOG_MAX_SIZE = parseInt(
+	process.env.AUDIT_LOG_MAX_SIZE || String(10 * 1024 * 1024),
+	10,
+);
+// Number of rotated files to keep (default 3: .log, .log.1, .log.2)
+export const AUDIT_LOG_MAX_FILES = parseInt(
+	process.env.AUDIT_LOG_MAX_FILES || "3",
+	10,
+);
 
 // ============== Rate Limiting ==============
 

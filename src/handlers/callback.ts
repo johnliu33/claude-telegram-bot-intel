@@ -33,13 +33,19 @@ export async function handleCallback(ctx: Context): Promise<void> {
 		return;
 	}
 
-	// 2. Handle bookmark callbacks
+	// 2. Handle timeout response callbacks
+	if (callbackData.startsWith("timeout:")) {
+		await handleTimeoutCallback(ctx, callbackData);
+		return;
+	}
+
+	// 2b. Handle bookmark callbacks
 	if (callbackData.startsWith("bookmark:")) {
 		await handleBookmarkCallback(ctx, callbackData);
 		return;
 	}
 
-	// 2b. Handle file sending callbacks
+	// 2c. Handle file sending callbacks
 	if (callbackData.startsWith("sendfile:")) {
 		await handleSendFileCallback(ctx, callbackData);
 		return;
@@ -161,6 +167,37 @@ export async function handleCallback(ctx: Context): Promise<void> {
 		}
 	} finally {
 		typing.stop();
+	}
+}
+
+/**
+ * Handle timeout check response callbacks.
+ * Format: timeout:continue or timeout:abort
+ */
+async function handleTimeoutCallback(
+	ctx: Context,
+	callbackData: string,
+): Promise<void> {
+	const action = callbackData.split(":")[1];
+
+	if (action === "abort") {
+		session.setTimeoutResponse("abort");
+		await ctx.answerCallbackQuery({ text: "正在中斷..." });
+		try {
+			await ctx.editMessageText("🛑 已選擇中斷");
+		} catch {
+			// Message may have been deleted
+		}
+	} else if (action === "continue") {
+		session.setTimeoutResponse("continue");
+		await ctx.answerCallbackQuery({ text: "繼續執行" });
+		try {
+			await ctx.editMessageText("▶️ 繼續執行中...");
+		} catch {
+			// Message may have been deleted
+		}
+	} else {
+		await ctx.answerCallbackQuery({ text: "Unknown action" });
 	}
 }
 
