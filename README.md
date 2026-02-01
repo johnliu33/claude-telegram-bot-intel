@@ -32,15 +32,32 @@ To achieve this, I set up a folder with a CLAUDE.md that teaches Claude about me
 
 ## Quick Start
 
+### Install via npm (Recommended)
+
 ```bash
-git clone https://github.com/linuz90/claude-telegram-bot?tab=readme-ov-file
-cd claude-telegram-bot-ts
+# Install globally
+npm install -g ctb
+
+# Run in any project directory
+cd ~/my-project
+ctb
+```
+
+On first run, `ctb` will prompt for your Telegram bot token and allowed user IDs, then optionally save them to `.env`.
+
+**Run multiple instances:** Each project directory gets its own isolated bot session. Open multiple terminals and run `ctb` in different directories.
+
+### Install from Source
+
+```bash
+git clone https://github.com/htlin/claude-telegram-bot
+cd claude-telegram-bot
 
 cp .env.example .env
 # Edit .env with your credentials
 
 bun install
-bun run src/index.ts
+bun run start
 ```
 
 ### Prerequisites

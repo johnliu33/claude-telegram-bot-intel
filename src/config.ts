@@ -4,8 +4,8 @@
  * All environment variables, paths, constants, and safety settings.
  */
 
-import { homedir } from "os";
-import { resolve, dirname } from "path";
+import { homedir } from "node:os";
+import { dirname, resolve } from "node:path";
 import type { McpServerConfig } from "./types";
 
 // ============== Environment Setup ==============
@@ -15,19 +15,19 @@ const HOME = homedir();
 // Ensure necessary paths are available for Claude's bash commands
 // LaunchAgents don't inherit the full shell environment
 const EXTRA_PATHS = [
-  `${HOME}/.local/bin`,
-  `${HOME}/.bun/bin`,
-  "/opt/homebrew/bin",
-  "/opt/homebrew/sbin",
-  "/usr/local/bin",
+	`${HOME}/.local/bin`,
+	`${HOME}/.bun/bin`,
+	"/opt/homebrew/bin",
+	"/opt/homebrew/sbin",
+	"/usr/local/bin",
 ];
 
 const currentPath = process.env.PATH || "";
 const pathParts = currentPath.split(":");
 for (const extraPath of EXTRA_PATHS) {
-  if (!pathParts.includes(extraPath)) {
-    pathParts.unshift(extraPath);
-  }
+	if (!pathParts.includes(extraPath)) {
+		pathParts.unshift(extraPath);
+	}
 }
 process.env.PATH = pathParts.join(":");
 
@@ -35,12 +35,12 @@ process.env.PATH = pathParts.join(":");
 
 export const TELEGRAM_TOKEN = process.env.TELEGRAM_BOT_TOKEN || "";
 export const ALLOWED_USERS: number[] = (
-  process.env.TELEGRAM_ALLOWED_USERS || ""
+	process.env.TELEGRAM_ALLOWED_USERS || ""
 )
-  .split(",")
-  .filter((x) => x.trim())
-  .map((x) => parseInt(x.trim(), 10))
-  .filter((x) => !isNaN(x));
+	.split(",")
+	.filter((x) => x.trim())
+	.map((x) => parseInt(x.trim(), 10))
+	.filter((x) => !Number.isNaN(x));
 
 export const WORKING_DIR = process.env.CLAUDE_WORKING_DIR || HOME;
 export const OPENAI_API_KEY = process.env.OPENAI_API_KEY || "";
@@ -49,15 +49,15 @@ export const OPENAI_API_KEY = process.env.OPENAI_API_KEY || "";
 
 // Auto-detect from PATH, or use environment override
 function findClaudeCli(): string {
-  const envPath = process.env.CLAUDE_CLI_PATH;
-  if (envPath) return envPath;
+	const envPath = process.env.CLAUDE_CLI_PATH;
+	if (envPath) return envPath;
 
-  // Try to find claude in PATH using Bun.which
-  const whichResult = Bun.which("claude");
-  if (whichResult) return whichResult;
+	// Try to find claude in PATH using Bun.which
+	const whichResult = Bun.which("claude");
+	if (whichResult) return whichResult;
 
-  // Final fallback
-  return "/usr/local/bin/claude";
+	// Final fallback
+	return "/usr/local/bin/claude";
 }
 
 export const CLAUDE_CLI_PATH = findClaudeCli();
@@ -68,17 +68,17 @@ export const CLAUDE_CLI_PATH = findClaudeCli();
 let MCP_SERVERS: Record<string, McpServerConfig> = {};
 
 try {
-  // Dynamic import of MCP config
-  const mcpConfigPath = resolve(dirname(import.meta.dir), "mcp-config.ts");
-  const mcpModule = await import(mcpConfigPath).catch(() => null);
-  if (mcpModule?.MCP_SERVERS) {
-    MCP_SERVERS = mcpModule.MCP_SERVERS;
-    console.log(
-      `Loaded ${Object.keys(MCP_SERVERS).length} MCP servers from mcp-config.ts`
-    );
-  }
+	// Dynamic import of MCP config
+	const mcpConfigPath = resolve(dirname(import.meta.dir), "mcp-config.ts");
+	const mcpModule = await import(mcpConfigPath).catch(() => null);
+	if (mcpModule?.MCP_SERVERS) {
+		MCP_SERVERS = mcpModule.MCP_SERVERS;
+		console.log(
+			`Loaded ${Object.keys(MCP_SERVERS).length} MCP servers from mcp-config.ts`,
+		);
+	}
 } catch {
-  console.log("No mcp-config.ts found - running without MCPs");
+	console.log("No mcp-config.ts found - running without MCPs");
 }
 
 export { MCP_SERVERS };
@@ -87,28 +87,28 @@ export { MCP_SERVERS };
 
 // Allowed directories for file operations
 const defaultAllowedPaths = [
-  WORKING_DIR,
-  `${HOME}/Documents`,
-  `${HOME}/Downloads`,
-  `${HOME}/Desktop`,
-  `${HOME}/.claude`, // Claude Code data (plans, settings)
+	WORKING_DIR,
+	`${HOME}/Documents`,
+	`${HOME}/Downloads`,
+	`${HOME}/Desktop`,
+	`${HOME}/.claude`, // Claude Code data (plans, settings)
 ];
 
 const allowedPathsStr = process.env.ALLOWED_PATHS || "";
 export const ALLOWED_PATHS: string[] = allowedPathsStr
-  ? allowedPathsStr
-      .split(",")
-      .map((p) => p.trim())
-      .filter(Boolean)
-  : defaultAllowedPaths;
+	? allowedPathsStr
+			.split(",")
+			.map((p) => p.trim())
+			.filter(Boolean)
+	: defaultAllowedPaths;
 
 // Build safety prompt dynamically from ALLOWED_PATHS
 function buildSafetyPrompt(allowedPaths: string[]): string {
-  const pathsList = allowedPaths
-    .map((p) => `   - ${p} (and subdirectories)`)
-    .join("\n");
+	const pathsList = allowedPaths
+		.map((p) => `   - ${p} (and subdirectories)`)
+		.join("\n");
 
-  return `
+	return `
 CRITICAL SAFETY RULES FOR TELEGRAM BOT:
 
 1. NEVER delete, remove, or overwrite files without EXPLICIT confirmation from the user.
@@ -135,14 +135,14 @@ export const SAFETY_PROMPT = buildSafetyPrompt(ALLOWED_PATHS);
 
 // Dangerous command patterns to block
 export const BLOCKED_PATTERNS = [
-  "rm -rf /",
-  "rm -rf ~",
-  "rm -rf $HOME",
-  "sudo rm",
-  ":(){ :|:& };:", // Fork bomb
-  "> /dev/sd",
-  "mkfs.",
-  "dd if=",
+	"rm -rf /",
+	"rm -rf ~",
+	"rm -rf $HOME",
+	"sudo rm",
+	":(){ :|:& };:", // Fork bomb
+	"> /dev/sd",
+	"mkfs.",
+	"dd if=",
 ];
 
 // Query timeout (3 minutes)
@@ -157,24 +157,24 @@ Focus on accuracy for proper nouns, technical terms, and commands.`;
 const TRANSCRIPTION_CONTEXT = process.env.TRANSCRIPTION_CONTEXT || "";
 
 export const TRANSCRIPTION_PROMPT = TRANSCRIPTION_CONTEXT
-  ? `${BASE_TRANSCRIPTION_PROMPT}\n\nAdditional context:\n${TRANSCRIPTION_CONTEXT}`
-  : BASE_TRANSCRIPTION_PROMPT;
+	? `${BASE_TRANSCRIPTION_PROMPT}\n\nAdditional context:\n${TRANSCRIPTION_CONTEXT}`
+	: BASE_TRANSCRIPTION_PROMPT;
 
 export const TRANSCRIPTION_AVAILABLE = !!OPENAI_API_KEY;
 
 // ============== Thinking Keywords ==============
 
 const thinkingKeywordsStr =
-  process.env.THINKING_KEYWORDS || "think,pensa,ragiona";
+	process.env.THINKING_KEYWORDS || "think,pensa,ragiona";
 const thinkingDeepKeywordsStr =
-  process.env.THINKING_DEEP_KEYWORDS || "ultrathink,think hard,pensa bene";
+	process.env.THINKING_DEEP_KEYWORDS || "ultrathink,think hard,pensa bene";
 
 export const THINKING_KEYWORDS = thinkingKeywordsStr
-  .split(",")
-  .map((k) => k.trim().toLowerCase());
+	.split(",")
+	.map((k) => k.trim().toLowerCase());
 export const THINKING_DEEP_KEYWORDS = thinkingDeepKeywordsStr
-  .split(",")
-  .map((k) => k.trim().toLowerCase());
+	.split(",")
+	.map((k) => k.trim().toLowerCase());
 
 // ============== Media Group Settings ==============
 
@@ -190,49 +190,65 @@ export const BUTTON_LABEL_MAX_LENGTH = 30; // Max chars for inline button labels
 // ============== Audit Logging ==============
 
 export const AUDIT_LOG_PATH =
-  process.env.AUDIT_LOG_PATH || "/tmp/claude-telegram-audit.log";
+	process.env.AUDIT_LOG_PATH || "/tmp/claude-telegram-audit.log";
 export const AUDIT_LOG_JSON =
-  (process.env.AUDIT_LOG_JSON || "false").toLowerCase() === "true";
+	(process.env.AUDIT_LOG_JSON || "false").toLowerCase() === "true";
 
 // ============== Rate Limiting ==============
 
 export const RATE_LIMIT_ENABLED =
-  (process.env.RATE_LIMIT_ENABLED || "true").toLowerCase() === "true";
+	(process.env.RATE_LIMIT_ENABLED || "true").toLowerCase() === "true";
 export const RATE_LIMIT_REQUESTS = parseInt(
-  process.env.RATE_LIMIT_REQUESTS || "20",
-  10
+	process.env.RATE_LIMIT_REQUESTS || "20",
+	10,
 );
 export const RATE_LIMIT_WINDOW = parseInt(
-  process.env.RATE_LIMIT_WINDOW || "60",
-  10
+	process.env.RATE_LIMIT_WINDOW || "60",
+	10,
 );
 
 // ============== File Paths ==============
 
-export const SESSION_FILE = "/tmp/claude-telegram-session.json";
-export const RESTART_FILE = "/tmp/claude-telegram-restart.json";
-export const TEMP_DIR = "/tmp/telegram-bot";
+// Generate a short hash for instance isolation
+function hashDir(dir: string): string {
+	let hash = 0;
+	for (let i = 0; i < dir.length; i++) {
+		const char = dir.charCodeAt(i);
+		hash = ((hash << 5) - hash + char) | 0;
+	}
+	return Math.abs(hash).toString(36).slice(0, 8);
+}
+
+// Instance directory for session isolation (set by CLI or defaults to working dir)
+const INSTANCE_DIR = process.env.CTB_INSTANCE_DIR || WORKING_DIR;
+const INSTANCE_HASH = hashDir(INSTANCE_DIR);
+const INSTANCE_TEMP_DIR = `/tmp/ctb-${INSTANCE_HASH}`;
+
+export const SESSION_FILE = `${INSTANCE_TEMP_DIR}/session.json`;
+export const RESTART_FILE = `${INSTANCE_TEMP_DIR}/restart.json`;
+export const TEMP_DIR = `${INSTANCE_TEMP_DIR}/downloads`;
 
 // Temp paths that are always allowed for bot operations
 export const TEMP_PATHS = ["/tmp/", "/private/tmp/", "/var/folders/"];
 
-// Ensure temp directory exists
+// Ensure temp directories exist
+await Bun.write(`${INSTANCE_TEMP_DIR}/.keep`, "");
 await Bun.write(`${TEMP_DIR}/.keep`, "");
 
 // ============== Validation ==============
 
 if (!TELEGRAM_TOKEN) {
-  console.error("ERROR: TELEGRAM_BOT_TOKEN environment variable is required");
-  process.exit(1);
+	console.error("ERROR: TELEGRAM_BOT_TOKEN environment variable is required");
+	process.exit(1);
 }
 
 if (ALLOWED_USERS.length === 0) {
-  console.error(
-    "ERROR: TELEGRAM_ALLOWED_USERS environment variable is required"
-  );
-  process.exit(1);
+	console.error(
+		"ERROR: TELEGRAM_ALLOWED_USERS environment variable is required",
+	);
+	process.exit(1);
 }
 
 console.log(
-  `Config loaded: ${ALLOWED_USERS.length} allowed users, working dir: ${WORKING_DIR}`
+	`Config loaded: ${ALLOWED_USERS.length} allowed users, working dir: ${WORKING_DIR}`,
 );

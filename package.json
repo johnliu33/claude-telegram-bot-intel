@@ -1,25 +1,46 @@
 {
-  "name": "claude-telegram-bot-ts",
-  "module": "src/index.ts",
-  "type": "module",
-  "private": true,
-  "scripts": {
-    "start": "bun run src/index.ts",
-    "dev": "bun --watch run src/index.ts",
-    "typecheck": "bun run --bun tsc --noEmit"
-  },
-  "devDependencies": {
-    "@types/bun": "latest"
-  },
-  "peerDependencies": {
-    "typescript": "^5"
-  },
-  "dependencies": {
-    "@anthropic-ai/claude-agent-sdk": "^0.1.76",
-    "@grammyjs/runner": "^2.0.3",
-    "@modelcontextprotocol/sdk": "^1.25.1",
-    "grammy": "^1.38.4",
-    "openai": "^6.15.0",
-    "zod": "^4.2.1"
-  }
+	"name": "ctb",
+	"version": "1.0.0",
+	"description": "Control Claude Code from Telegram - run multiple bot instances per project",
+	"type": "module",
+	"bin": {
+		"ctb": "./src/cli.ts"
+	},
+	"scripts": {
+		"start": "bun run src/bot.ts",
+		"dev": "bun --watch run src/bot.ts",
+		"ctb": "bun run src/cli.ts",
+		"typecheck": "bun run --bun tsc --noEmit"
+	},
+	"keywords": [
+		"claude",
+		"telegram",
+		"bot",
+		"cli",
+		"ai",
+		"anthropic"
+	],
+	"author": "",
+	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/htlin/claude-telegram-bot"
+	},
+	"engines": {
+		"bun": ">=1.0.0"
+	},
+	"devDependencies": {
+		"@types/bun": "latest"
+	},
+	"peerDependencies": {
+		"typescript": "^5"
+	},
+	"dependencies": {
+		"@anthropic-ai/claude-agent-sdk": "^0.1.76",
+		"@grammyjs/runner": "^2.0.3",
+		"@modelcontextprotocol/sdk": "^1.25.1",
+		"grammy": "^1.38.4",
+		"openai": "^6.15.0",
+		"zod": "^4.2.1"
+	}
 }

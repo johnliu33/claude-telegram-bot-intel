@@ -298,7 +298,7 @@ export async function handleCd(ctx: Context): Promise<void> {
 		return;
 	}
 
-	const inputPath = match[1].trim();
+	const inputPath = (match[1] ?? "").trim();
 	const resolvedPath = resolvePath(inputPath);
 
 	// Validate path exists and is a directory
