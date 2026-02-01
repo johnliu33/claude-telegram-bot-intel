@@ -157,6 +157,11 @@ The bot includes a built-in `ask_user` MCP server that lets Claude present optio
 | `/resume`       | Resume last session after restart                          |
 | `/stop`         | Interrupt current query (aliases: `/c`, `/kill`, `/dc`)    |
 | `/status`       | Check what Claude is doing                                 |
+| `/model <name>` | Switch model: sonnet, opus, haiku                          |
+| `/cost`         | Show token usage and estimated cost                        |
+| `/think [lvl]`  | Force thinking: off, normal, deep (default)                |
+| `/plan`         | Toggle planning mode (no tool execution)                   |
+| `/compact`      | Trigger context compaction                                 |
 | `/cd <path>`    | Change working directory                                   |
 | `/skill <name>` | Invoke a Claude Code skill (e.g., `/skill commit`)         |
 | `/file [path]`  | Download file (auto-detects from last response if no path) |

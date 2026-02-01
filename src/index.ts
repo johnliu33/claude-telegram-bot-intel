@@ -17,10 +17,14 @@ import {
 	handleBookmarks,
 	handleCallback,
 	handleCd,
+	handleCompact,
+	handleCost,
 	handleDocument,
 	handleFile,
+	handleModel,
 	handleNew,
 	handlePhoto,
+	handlePlan,
 	handleRestart,
 	handleResume,
 	handleRetry,
@@ -29,6 +33,7 @@ import {
 	handleStatus,
 	handleStop,
 	handleText,
+	handleThink,
 	handleVoice,
 } from "./handlers";
 
@@ -71,6 +76,11 @@ bot.command("retry", handleRetry);
 bot.command("cd", handleCd);
 bot.command("skill", handleSkill);
 bot.command("file", handleFile);
+bot.command("model", handleModel);
+bot.command("cost", handleCost);
+bot.command("think", handleThink);
+bot.command("plan", handlePlan);
+bot.command("compact", handleCompact);
 bot.command("bookmarks", handleBookmarks);
 
 // ============== Message Handlers ==============

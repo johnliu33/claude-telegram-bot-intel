@@ -80,6 +80,16 @@ class ClaudeSession {
 	lastMessage: string | null = null;
 	lastBotResponse: string | null = null;
 
+	// Model and mode settings
+	currentModel: "sonnet" | "opus" | "haiku" = "sonnet";
+	forceThinking: number | null = null; // Tokens for next message, then resets
+	planMode = false;
+
+	// Cumulative usage tracking
+	totalInputTokens = 0;
+	totalOutputTokens = 0;
+	totalCacheReadTokens = 0;
+
 	// Mutable working directory (can be changed with /cd)
 	private _workingDir: string = WORKING_DIR;
 
@@ -193,10 +203,26 @@ class ClaudeSession {
 		}
 
 		const isNewSession = !this.isActive;
-		const thinkingTokens = getThinkingLevel(message);
+
+		// Determine thinking tokens - forceThinking overrides keyword detection
+		let thinkingTokens: number;
+		if (this.forceThinking !== null) {
+			thinkingTokens = this.forceThinking;
+			this.forceThinking = null; // Reset after use
+		} else {
+			thinkingTokens = getThinkingLevel(message);
+		}
 		const thinkingLabel =
 			{ 0: "off", 10000: "normal", 50000: "deep" }[thinkingTokens] ||
 			String(thinkingTokens);
+
+		// Determine model based on currentModel setting
+		const modelMap = {
+			sonnet: "claude-sonnet-4-5",
+			opus: "claude-opus-4-5",
+			haiku: "claude-haiku-3-5",
+		};
+		const modelId = modelMap[this.currentModel];
 
 		// Inject current date/time at session start so Claude doesn't need to call a tool for it
 		let messageToSend = message;
@@ -219,11 +245,11 @@ class ClaudeSession {
 
 		// Build SDK V1 options - supports all features
 		const options: Options = {
-			model: "claude-sonnet-4-5",
+			model: modelId,
 			cwd: this._workingDir,
 			settingSources: ["user", "project"],
-			permissionMode: "bypassPermissions",
-			allowDangerouslySkipPermissions: true,
+			permissionMode: this.planMode ? "plan" : "bypassPermissions",
+			allowDangerouslySkipPermissions: !this.planMode,
 			systemPrompt: SAFETY_PROMPT,
 			mcpServers: MCP_SERVERS,
 			maxThinkingTokens: thinkingTokens,
@@ -437,6 +463,10 @@ class ClaudeSession {
 					if ("usage" in event && event.usage) {
 						this.lastUsage = event.usage as TokenUsage;
 						const u = this.lastUsage;
+						// Accumulate totals
+						this.totalInputTokens += u.input_tokens || 0;
+						this.totalOutputTokens += u.output_tokens || 0;
+						this.totalCacheReadTokens += u.cache_read_input_tokens || 0;
 						console.log(
 							`Usage: in=${u.input_tokens} out=${u.output_tokens} cache_read=${
 								u.cache_read_input_tokens || 0
@@ -498,7 +528,36 @@ class ClaudeSession {
 	async kill(): Promise<void> {
 		this.sessionId = null;
 		this.lastActivity = null;
+		// Reset usage totals
+		this.totalInputTokens = 0;
+		this.totalOutputTokens = 0;
+		this.totalCacheReadTokens = 0;
+		// Reset modes
+		this.planMode = false;
+		this.forceThinking = null;
 		console.log("Session cleared");
+	}
+
+	/**
+	 * Estimate cost based on current model and usage.
+	 */
+	estimateCost(): { inputCost: number; outputCost: number; total: number } {
+		// Pricing per 1M tokens (approximate as of 2024)
+		const pricing = {
+			sonnet: { input: 3, output: 15 },
+			opus: { input: 15, output: 75 },
+			haiku: { input: 0.25, output: 1.25 },
+		};
+		const rates = pricing[this.currentModel];
+
+		const inputCost = (this.totalInputTokens / 1_000_000) * rates.input;
+		const outputCost = (this.totalOutputTokens / 1_000_000) * rates.output;
+
+		return {
+			inputCost,
+			outputCost,
+			total: inputCost + outputCost,
+		};
 	}
 
 	/**

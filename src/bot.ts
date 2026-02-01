@@ -18,10 +18,14 @@ import {
 	handleBookmarks,
 	handleCallback,
 	handleCd,
+	handleCompact,
+	handleCost,
 	handleDocument,
 	handleFile,
+	handleModel,
 	handleNew,
 	handlePhoto,
+	handlePlan,
 	handleRestart,
 	handleResume,
 	handleRetry,
@@ -30,6 +34,7 @@ import {
 	handleStatus,
 	handleStop,
 	handleText,
+	handleThink,
 	handleVoice,
 } from "./handlers";
 
@@ -72,6 +77,11 @@ bot.command("retry", handleRetry);
 bot.command("cd", handleCd);
 bot.command("skill", handleSkill);
 bot.command("file", handleFile);
+bot.command("model", handleModel);
+bot.command("cost", handleCost);
+bot.command("think", handleThink);
+bot.command("plan", handlePlan);
+bot.command("compact", handleCompact);
 bot.command("bookmarks", handleBookmarks);
 
 // ============== Message Handlers ==============
@@ -118,6 +128,11 @@ await bot.api.setMyCommands([
 	{ command: "resume", description: "Resume last session" },
 	{ command: "stop", description: "Interrupt current query" },
 	{ command: "status", description: "Check what Claude is doing" },
+	{ command: "model", description: "Switch model (sonnet/opus/haiku)" },
+	{ command: "cost", description: "Show token usage and cost" },
+	{ command: "think", description: "Force extended thinking" },
+	{ command: "plan", description: "Toggle planning mode" },
+	{ command: "compact", description: "Trigger context compaction" },
 	{ command: "cd", description: "Change working directory" },
 	{ command: "skill", description: "Invoke a Claude Code skill" },
 	{ command: "file", description: "Download a file" },

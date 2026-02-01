@@ -6,8 +6,12 @@ export { handleCallback } from "./callback";
 export {
 	handleBookmarks,
 	handleCd,
+	handleCompact,
+	handleCost,
 	handleFile,
+	handleModel,
 	handleNew,
+	handlePlan,
 	handleRestart,
 	handleResume,
 	handleRetry,
@@ -15,6 +19,7 @@ export {
 	handleStart,
 	handleStatus,
 	handleStop,
+	handleThink,
 } from "./commands";
 export { handleDocument } from "./document";
 export { handlePhoto } from "./photo";

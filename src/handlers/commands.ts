@@ -325,6 +325,175 @@ export async function handleSkill(ctx: Context): Promise<void> {
 }
 
 /**
+ * /model - Switch between models.
+ */
+export async function handleModel(ctx: Context): Promise<void> {
+	const userId = ctx.from?.id;
+
+	if (!isAuthorized(userId, ALLOWED_USERS)) {
+		await ctx.reply("Unauthorized.");
+		return;
+	}
+
+	const text = ctx.message?.text || "";
+	const match = text.match(/^\/model\s+(\w+)$/i);
+
+	if (!match) {
+		const current = session.currentModel;
+		await ctx.reply(
+			`🤖 <b>Model Selection</b>\n\n` +
+				`Current: <b>${current}</b>\n\n` +
+				`Usage: <code>/model &lt;name&gt;</code>\n\n` +
+				`Available:\n` +
+				`• <code>/model sonnet</code> - Fast, balanced\n` +
+				`• <code>/model opus</code> - Most capable\n` +
+				`• <code>/model haiku</code> - Fastest, cheapest`,
+			{ parse_mode: "HTML" },
+		);
+		return;
+	}
+
+	const modelName = match[1]?.toLowerCase();
+	if (modelName !== "sonnet" && modelName !== "opus" && modelName !== "haiku") {
+		await ctx.reply(
+			`❌ Unknown model: ${modelName}\n\nUse: sonnet, opus, or haiku`,
+		);
+		return;
+	}
+
+	session.currentModel = modelName;
+	await ctx.reply(`🤖 Switched to <b>${modelName}</b>`, { parse_mode: "HTML" });
+}
+
+/**
+ * /cost - Show token usage and estimated cost.
+ */
+export async function handleCost(ctx: Context): Promise<void> {
+	const userId = ctx.from?.id;
+
+	if (!isAuthorized(userId, ALLOWED_USERS)) {
+		await ctx.reply("Unauthorized.");
+		return;
+	}
+
+	const cost = session.estimateCost();
+	const formatNum = (n: number) => n.toLocaleString();
+	const formatCost = (n: number) => `$${n.toFixed(4)}`;
+
+	await ctx.reply(
+		`💰 <b>Session Usage</b>\n\n` +
+			`Model: <b>${session.currentModel}</b>\n\n` +
+			`<b>Tokens:</b>\n` +
+			`• Input: ${formatNum(session.totalInputTokens)}\n` +
+			`• Output: ${formatNum(session.totalOutputTokens)}\n` +
+			`• Cache read: ${formatNum(session.totalCacheReadTokens)}\n\n` +
+			`<b>Estimated Cost:</b>\n` +
+			`• Input: ${formatCost(cost.inputCost)}\n` +
+			`• Output: ${formatCost(cost.outputCost)}\n` +
+			`• Total: <b>${formatCost(cost.total)}</b>`,
+		{ parse_mode: "HTML" },
+	);
+}
+
+/**
+ * /think - Force extended thinking for next message.
+ */
+export async function handleThink(ctx: Context): Promise<void> {
+	const userId = ctx.from?.id;
+
+	if (!isAuthorized(userId, ALLOWED_USERS)) {
+		await ctx.reply("Unauthorized.");
+		return;
+	}
+
+	const text = ctx.message?.text || "";
+	const match = text.match(/^\/think\s+(\w+)$/i);
+
+	let tokens: number;
+	let label: string;
+
+	if (!match) {
+		// Default to deep thinking
+		tokens = 50000;
+		label = "deep (50K tokens)";
+	} else {
+		const level = match[1]?.toLowerCase();
+		if (level === "off" || level === "0") {
+			tokens = 0;
+			label = "off";
+		} else if (level === "normal" || level === "10k") {
+			tokens = 10000;
+			label = "normal (10K tokens)";
+		} else if (level === "deep" || level === "50k") {
+			tokens = 50000;
+			label = "deep (50K tokens)";
+		} else {
+			await ctx.reply(`❌ Unknown level: ${level}\n\nUse: off, normal, deep`);
+			return;
+		}
+	}
+
+	session.forceThinking = tokens;
+	await ctx.reply(`🧠 Next message will use <b>${label}</b> thinking`, {
+		parse_mode: "HTML",
+	});
+}
+
+/**
+ * /plan - Toggle planning mode.
+ */
+export async function handlePlan(ctx: Context): Promise<void> {
+	const userId = ctx.from?.id;
+
+	if (!isAuthorized(userId, ALLOWED_USERS)) {
+		await ctx.reply("Unauthorized.");
+		return;
+	}
+
+	session.planMode = !session.planMode;
+
+	if (session.planMode) {
+		await ctx.reply(
+			`📋 <b>Plan mode ON</b>\n\n` +
+				`Claude will analyze and plan without executing tools.\n` +
+				`Use <code>/plan</code> again to exit.`,
+			{ parse_mode: "HTML" },
+		);
+	} else {
+		await ctx.reply(`📋 Plan mode OFF - Normal execution resumed`);
+	}
+}
+
+/**
+ * /compact - Request context compaction (sends a hint to Claude).
+ */
+export async function handleCompact(ctx: Context): Promise<void> {
+	const userId = ctx.from?.id;
+
+	if (!isAuthorized(userId, ALLOWED_USERS)) {
+		await ctx.reply("Unauthorized.");
+		return;
+	}
+
+	if (!session.isActive) {
+		await ctx.reply("❌ No active session to compact.");
+		return;
+	}
+
+	// Send a message that triggers Claude to compact
+	const { handleText } = await import("./text");
+	const fakeCtx = {
+		...ctx,
+		message: {
+			...ctx.message,
+			text: "/compact",
+		},
+	} as Context;
+
+	await handleText(fakeCtx);
+}
+
+/**
  * /cd - Change working directory.
  */
 export async function handleCd(ctx: Context): Promise<void> {
