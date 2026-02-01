@@ -6,8 +6,8 @@ export { handleCallback } from "./callback";
 export {
 	handleBookmarks,
 	handleCd,
+	handleFile,
 	handleNew,
-	handlePreview,
 	handleRestart,
 	handleResume,
 	handleRetry,

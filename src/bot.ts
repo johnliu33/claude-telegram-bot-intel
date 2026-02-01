@@ -19,9 +19,9 @@ import {
 	handleCallback,
 	handleCd,
 	handleDocument,
+	handleFile,
 	handleNew,
 	handlePhoto,
-	handlePreview,
 	handleRestart,
 	handleResume,
 	handleRetry,
@@ -66,7 +66,7 @@ bot.command("resume", handleResume);
 bot.command("restart", handleRestart);
 bot.command("retry", handleRetry);
 bot.command("cd", handleCd);
-bot.command("preview", handlePreview);
+bot.command("file", handleFile);
 bot.command("bookmarks", handleBookmarks);
 
 // ============== Message Handlers ==============
@@ -114,7 +114,7 @@ await bot.api.setMyCommands([
 	{ command: "stop", description: "Interrupt current query" },
 	{ command: "status", description: "Check what Claude is doing" },
 	{ command: "cd", description: "Change working directory" },
-	{ command: "preview", description: "Download a file" },
+	{ command: "file", description: "Download a file" },
 	{ command: "bookmarks", description: "Manage directory bookmarks" },
 	{ command: "retry", description: "Retry last message" },
 	{ command: "restart", description: "Restart the bot" },

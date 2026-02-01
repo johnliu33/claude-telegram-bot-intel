@@ -18,9 +18,9 @@ import {
 	handleCallback,
 	handleCd,
 	handleDocument,
+	handleFile,
 	handleNew,
 	handlePhoto,
-	handlePreview,
 	handleRestart,
 	handleResume,
 	handleRetry,
@@ -65,7 +65,7 @@ bot.command("resume", handleResume);
 bot.command("restart", handleRestart);
 bot.command("retry", handleRetry);
 bot.command("cd", handleCd);
-bot.command("preview", handlePreview);
+bot.command("file", handleFile);
 bot.command("bookmarks", handleBookmarks);
 
 // ============== Message Handlers ==============

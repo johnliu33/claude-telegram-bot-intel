@@ -37,7 +37,7 @@ export async function handleStart(ctx: Context): Promise<void> {
 			`/resume - Resume last session\n` +
 			`/retry - Retry last message\n` +
 			`/cd - Change working directory\n` +
-			`/preview - Download a file\n` +
+			`/file - Download a file\n` +
 			`/bookmarks - Manage directory bookmarks\n` +
 			`/restart - Restart the bot\n\n` +
 			`<b>Tips:</b>\n` +
@@ -352,9 +352,9 @@ export async function handleCd(ctx: Context): Promise<void> {
 }
 
 /**
- * /preview - Send a file to the user.
+ * /file - Send a file to the user.
  */
-export async function handlePreview(ctx: Context): Promise<void> {
+export async function handleFile(ctx: Context): Promise<void> {
 	const userId = ctx.from?.id;
 
 	if (!isAuthorized(userId, ALLOWED_USERS)) {
@@ -364,16 +364,16 @@ export async function handlePreview(ctx: Context): Promise<void> {
 
 	// Get the path argument from command
 	const text = ctx.message?.text || "";
-	const match = text.match(/^\/preview\s+(.+)$/);
+	const match = text.match(/^\/file\s+(.+)$/);
 
 	if (!match) {
 		await ctx.reply(
-			`📎 <b>Preview/Download File</b>\n\n` +
-				`Usage: <code>/preview &lt;filepath&gt;</code>\n\n` +
+			`📎 <b>Download File</b>\n\n` +
+				`Usage: <code>/file &lt;filepath&gt;</code>\n\n` +
 				`Examples:\n` +
-				`• <code>/preview output.txt</code> (relative to working dir)\n` +
-				`• <code>/preview /absolute/path/file.pdf</code>\n` +
-				`• <code>/preview ~/Documents/report.csv</code>`,
+				`• <code>/file output.txt</code> (relative to working dir)\n` +
+				`• <code>/file /absolute/path/file.pdf</code>\n` +
+				`• <code>/file ~/Documents/report.csv</code>`,
 			{ parse_mode: "HTML" },
 		);
 		return;
