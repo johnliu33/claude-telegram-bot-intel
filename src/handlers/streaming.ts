@@ -81,6 +81,10 @@ export async function checkPendingAskUserRequests(
 	return buttonsSent;
 }
 
+// Spinner frames for tool animation
+const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+const TOOL_SPINNER_INTERVAL_MS = 3000; // Update every 3 seconds
+
 /**
  * Tracks state for streaming message updates.
  */
@@ -90,6 +94,25 @@ export class StreamingState {
 	lastEditTimes = new Map<number, number>(); // segment_id -> last edit time
 	lastContent = new Map<number, string>(); // segment_id -> last sent content
 	toolStartTime: number | null = null; // timestamp when current tool started
+
+	// Tool spinner state
+	currentToolMsg: Message | null = null;
+	currentToolContent: string = "";
+	toolSpinnerInterval: ReturnType<typeof setInterval> | null = null;
+	spinnerIndex = 0;
+
+	/**
+	 * Stop the tool spinner animation.
+	 */
+	stopToolSpinner(): void {
+		if (this.toolSpinnerInterval) {
+			clearInterval(this.toolSpinnerInterval);
+			this.toolSpinnerInterval = null;
+		}
+		this.currentToolMsg = null;
+		this.currentToolContent = "";
+		this.spinnerIndex = 0;
+	}
 }
 
 /**
@@ -111,10 +134,42 @@ export function createStatusCallback(
 				});
 				state.toolMessages.push(thinkingMsg);
 			} else if (statusType === "tool") {
+				// Stop previous tool spinner if any
+				state.stopToolSpinner();
+
 				state.toolStartTime = Date.now();
-				const toolMsg = await ctx.reply(content, { parse_mode: "HTML" });
+				state.currentToolContent = content;
+				state.spinnerIndex = 0;
+
+				// Send initial tool message with spinner
+				const initialContent = `${content} ${SPINNER_FRAMES[0]}`;
+				const toolMsg = await ctx.reply(initialContent, { parse_mode: "HTML" });
 				state.toolMessages.push(toolMsg);
+				state.currentToolMsg = toolMsg;
+
+				// Start spinner animation (every 3 seconds)
+				state.toolSpinnerInterval = setInterval(async () => {
+					if (!state.currentToolMsg) return;
+
+					state.spinnerIndex = (state.spinnerIndex + 1) % SPINNER_FRAMES.length;
+					const spinner = SPINNER_FRAMES[state.spinnerIndex];
+					const newContent = `${state.currentToolContent} ${spinner}`;
+
+					try {
+						await ctx.api.editMessageText(
+							state.currentToolMsg.chat.id,
+							state.currentToolMsg.message_id,
+							newContent,
+							{ parse_mode: "HTML" },
+						);
+					} catch {
+						// Message may have been deleted, stop spinner
+						state.stopToolSpinner();
+					}
+				}, TOOL_SPINNER_INTERVAL_MS);
 			} else if (statusType === "text" && segmentId !== undefined) {
+				// New text segment means tool finished, stop spinner
+				state.stopToolSpinner();
 				const now = Date.now();
 				const lastEdit = state.lastEditTimes.get(segmentId) || 0;
 
@@ -221,6 +276,9 @@ export function createStatusCallback(
 				});
 				state.toolMessages.push(timeoutMsg); // Will be deleted when done
 			} else if (statusType === "done") {
+				// Stop any running tool spinner
+				state.stopToolSpinner();
+
 				// Delete tool messages - text messages stay
 				for (const toolMsg of state.toolMessages) {
 					try {
