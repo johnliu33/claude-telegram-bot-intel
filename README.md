@@ -160,25 +160,39 @@ The bot includes a built-in `ask_user` MCP server that lets Claude present optio
 
 ## Bot Commands
 
+### Session Management
+
+| Command    | Description                                             |
+| ---------- | ------------------------------------------------------- |
+| `/start`   | Show status and your user ID                            |
+| `/new`     | Start a fresh session                                   |
+| `/resume`  | Resume last session after restart                       |
+| `/stop`    | Interrupt current query (aliases: `/c`, `/kill`, `/dc`) |
+| `/status`  | Check what Claude is doing                              |
+| `/retry`   | Retry last message                                      |
+| `/handoff` | Compress session: carry last response to new session    |
+| `/pending` | Show queued messages (alias: `/q`)                      |
+| `/restart` | Restart the bot                                         |
+
+### Model & Thinking
+
+| Command         | Description                                 |
+| --------------- | ------------------------------------------- |
+| `/model <name>` | Switch model: sonnet, opus, haiku           |
+| `/think [lvl]`  | Force thinking: off, normal, deep (default) |
+| `/plan`         | Toggle planning mode (no tool execution)    |
+| `/compact`      | Trigger context compaction                  |
+| `/cost`         | Show token usage and estimated cost         |
+
+### Files & Navigation
+
 | Command         | Description                                                |
 | --------------- | ---------------------------------------------------------- |
-| `/start`        | Show status and your user ID                               |
-| `/new`          | Start a fresh session                                      |
-| `/resume`       | Resume last session after restart                          |
-| `/stop`         | Interrupt current query (aliases: `/c`, `/kill`, `/dc`)    |
-| `/status`       | Check what Claude is doing                                 |
-| `/model <name>` | Switch model: sonnet, opus, haiku                          |
-| `/cost`         | Show token usage and estimated cost                        |
-| `/think [lvl]`  | Force thinking: off, normal, deep (default)                |
-| `/plan`         | Toggle planning mode (no tool execution)                   |
-| `/compact`      | Trigger context compaction                                 |
-| `/undo`         | Revert file changes to last checkpoint                     |
 | `/cd <path>`    | Change working directory                                   |
-| `/skill <name>` | Invoke a Claude Code skill (e.g., `/skill commit`)         |
 | `/file [path]`  | Download file (auto-detects from last response if no path) |
+| `/undo`         | Revert file changes to last checkpoint                     |
+| `/skill <name>` | Invoke a Claude Code skill (e.g., `/skill commit`)         |
 | `/bookmarks`    | Manage directory bookmarks                                 |
-| `/retry`        | Retry last message                                         |
-| `/restart`      | Restart the bot                                            |
 
 ### Shell Commands
 

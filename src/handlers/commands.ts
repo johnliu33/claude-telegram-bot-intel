@@ -28,25 +28,39 @@ export async function handleStart(ctx: Context): Promise<void> {
 	const workDir = session.workingDir;
 
 	await ctx.reply(
-		`🤖 <b>Claude Telegram Bot</b>\n\n` +
-			`Status: ${status}\n` +
-			`Working directory: <code>${workDir}</code>\n\n` +
-			`<b>Commands:</b>\n` +
-			`/new - Start fresh session\n` +
-			`/stop - Stop current query\n` +
-			`/status - Show detailed status\n` +
-			`/resume - Resume last session\n` +
-			`/retry - Retry last message\n` +
-			`/handoff - Compress: carry last response to new session\n` +
-			`/cd - Change working directory\n` +
-			`/file - Download a file\n` +
-			`/bookmarks - Manage directory bookmarks\n` +
-			`/restart - Restart the bot\n\n` +
-			`<b>Tips:</b>\n` +
-			`• <code>!cmd</code> - Run shell command\n` +
-			`• <code>!!msg</code> - Interrupt and send new message\n` +
-			`• Use "think" keyword for extended reasoning\n` +
-			`• Send photos, voice, or documents`,
+		`🤖 <b>Claude Telegram Bot</b>
+
+Status: ${status}
+Working directory: <code>${workDir}</code>
+
+<b>Session:</b>
+/new - Start fresh session
+/stop - Stop current query (or /kill)
+/status - Show detailed status
+/resume - Resume last session
+/retry - Retry last message
+/handoff - Carry response to new session
+/pending - Show queued messages
+
+<b>Model:</b>
+/model - Switch model (sonnet/opus/haiku)
+/think - Force extended thinking
+/plan - Toggle planning mode
+/compact - Trigger context compaction
+/cost - Show token usage
+
+<b>Files:</b>
+/cd - Change working directory
+/file - Download a file
+/undo - Revert file changes
+/skill - Invoke Claude Code skill
+/bookmarks - Directory bookmarks
+/restart - Restart the bot
+
+<b>Tips:</b>
+• <code>!cmd</code> - Run shell command
+• <code>!!msg</code> - Interrupt and send
+• Send photos, voice, or documents`,
 		{ parse_mode: "HTML" },
 	);
 }
@@ -86,10 +100,7 @@ export async function handleNew(ctx: Context): Promise<void> {
 	});
 
 	await ctx.reply(
-		`🆕 Session cleared. Next message starts fresh.\n\n` +
-			`👤 ${username}\n` +
-			`📁 <code>${workDir}</code>\n` +
-			`🕐 ${now}`,
+		`🆕 Session cleared. Next message starts fresh.\n\n👤 ${username}\n📁 <code>${workDir}</code>\n🕐 ${now}`,
 		{ parse_mode: "HTML" },
 	);
 }
@@ -165,7 +176,7 @@ export async function handleStatus(ctx: Context): Promise<void> {
 	if (session.lastUsage) {
 		const usage = session.lastUsage;
 		lines.push(
-			`\n📈 Last query usage:`,
+			"\n📈 Last query usage:",
 			`   Input: ${usage.input_tokens?.toLocaleString() || "?"} tokens`,
 			`   Output: ${usage.output_tokens?.toLocaleString() || "?"} tokens`,
 		);
@@ -351,12 +362,12 @@ export async function handleSkill(ctx: Context): Promise<void> {
 
 	if (!match) {
 		await ctx.reply(
-			`🎯 <b>Invoke Skill</b>\n\n` +
-				`Usage: <code>/skill &lt;name&gt; [args]</code>\n\n` +
-				`Examples:\n` +
-				`• <code>/skill commit</code>\n` +
-				`• <code>/skill review-pr 123</code>\n` +
-				`• <code>/skill map</code>`,
+			"🎯 <b>Invoke Skill</b>\n\n" +
+				"Usage: <code>/skill &lt;name&gt; [args]</code>\n\n" +
+				"Examples:\n" +
+				"• <code>/skill commit</code>\n" +
+				"• <code>/skill review-pr 123</code>\n" +
+				"• <code>/skill map</code>",
 			{ parse_mode: "HTML" },
 		);
 		return;
@@ -400,13 +411,7 @@ export async function handleModel(ctx: Context): Promise<void> {
 	if (!match) {
 		const current = session.currentModel;
 		await ctx.reply(
-			`🤖 <b>Model Selection</b>\n\n` +
-				`Current: <b>${current}</b>\n\n` +
-				`Usage: <code>/model &lt;name&gt;</code>\n\n` +
-				`Available:\n` +
-				`• <code>/model sonnet</code> - Fast, balanced\n` +
-				`• <code>/model opus</code> - Most capable\n` +
-				`• <code>/model haiku</code> - Fastest, cheapest`,
+			`🤖 <b>Model Selection</b>\n\nCurrent: <b>${current}</b>\n\nUsage: <code>/model &lt;name&gt;</code>\n\nAvailable:\n• <code>/model sonnet</code> - Fast, balanced\n• <code>/model opus</code> - Most capable\n• <code>/model haiku</code> - Fastest, cheapest`,
 			{ parse_mode: "HTML" },
 		);
 		return;
@@ -440,16 +445,7 @@ export async function handleCost(ctx: Context): Promise<void> {
 	const formatCost = (n: number) => `$${n.toFixed(4)}`;
 
 	await ctx.reply(
-		`💰 <b>Session Usage</b>\n\n` +
-			`Model: <b>${session.currentModel}</b>\n\n` +
-			`<b>Tokens:</b>\n` +
-			`• Input: ${formatNum(session.totalInputTokens)}\n` +
-			`• Output: ${formatNum(session.totalOutputTokens)}\n` +
-			`• Cache read: ${formatNum(session.totalCacheReadTokens)}\n\n` +
-			`<b>Estimated Cost:</b>\n` +
-			`• Input: ${formatCost(cost.inputCost)}\n` +
-			`• Output: ${formatCost(cost.outputCost)}\n` +
-			`• Total: <b>${formatCost(cost.total)}</b>`,
+		`💰 <b>Session Usage</b>\n\nModel: <b>${session.currentModel}</b>\n\n<b>Tokens:</b>\n• Input: ${formatNum(session.totalInputTokens)}\n• Output: ${formatNum(session.totalOutputTokens)}\n• Cache read: ${formatNum(session.totalCacheReadTokens)}\n\n<b>Estimated Cost:</b>\n• Input: ${formatCost(cost.inputCost)}\n• Output: ${formatCost(cost.outputCost)}\n• Total: <b>${formatCost(cost.total)}</b>`,
 		{ parse_mode: "HTML" },
 	);
 }
@@ -513,13 +509,13 @@ export async function handlePlan(ctx: Context): Promise<void> {
 
 	if (session.planMode) {
 		await ctx.reply(
-			`📋 <b>Plan mode ON</b>\n\n` +
-				`Claude will analyze and plan without executing tools.\n` +
-				`Use <code>/plan</code> again to exit.`,
+			"📋 <b>Plan mode ON</b>\n\n" +
+				"Claude will analyze and plan without executing tools.\n" +
+				"Use <code>/plan</code> again to exit.",
 			{ parse_mode: "HTML" },
 		);
 	} else {
-		await ctx.reply(`📋 Plan mode OFF - Normal execution resumed`);
+		await ctx.reply("📋 Plan mode OFF - Normal execution resumed");
 	}
 }
 
@@ -593,12 +589,7 @@ export async function handleHandoff(ctx: Context): Promise<void> {
 		.text("❌ Cancel", "handoff:cancel");
 
 	await ctx.reply(
-		`📦 <b>Context Handoff</b>\n\n` +
-			`This will:\n` +
-			`1. Clear current session\n` +
-			`2. Start fresh with last response as context\n\n` +
-			`<b>Last response preview:</b>\n` +
-			`<code>${escapeHtml(preview)}</code>`,
+		`📦 <b>Context Handoff</b>\n\nThis will:\n1. Clear current session\n2. Start fresh with last response as context\n\n<b>Last response preview:</b>\n<code>${escapeHtml(preview)}</code>`,
 		{ parse_mode: "HTML", reply_markup: keyboard },
 	);
 }
@@ -621,8 +612,8 @@ export async function handleUndo(ctx: Context): Promise<void> {
 
 	if (!session.canUndo) {
 		await ctx.reply(
-			`❌ No checkpoints available.\n\n` +
-				`Checkpoints are created when you send messages.`,
+			"❌ No checkpoints available.\n\n" +
+				"Checkpoints are created when you send messages.",
 		);
 		return;
 	}
@@ -636,7 +627,7 @@ export async function handleUndo(ctx: Context): Promise<void> {
 
 		// Update status message with result
 		await ctx.api.editMessageText(
-			ctx.chat!.id,
+			ctx.chat?.id,
 			statusMsg.message_id,
 			success ? message : `❌ ${message}`,
 			{ parse_mode: "HTML" },
@@ -663,8 +654,7 @@ export async function handleCd(ctx: Context): Promise<void> {
 
 	if (!match) {
 		await ctx.reply(
-			`📁 Current directory: <code>${session.workingDir}</code>\n\n` +
-				`Usage: <code>/cd /path/to/directory</code>`,
+			`📁 Current directory: <code>${session.workingDir}</code>\n\nUsage: <code>/cd /path/to/directory</code>`,
 			{ parse_mode: "HTML" },
 		);
 		return;
@@ -785,10 +775,10 @@ export async function handleFile(ctx: Context): Promise<void> {
 	if (!match) {
 		if (!session.lastBotResponse) {
 			await ctx.reply(
-				`📎 <b>Download File</b>\n\n` +
-					`Usage: <code>/file &lt;filepath&gt;</code>\n` +
-					`Or just <code>/file</code> to send files from the last response.\n\n` +
-					`No recent response to extract files from.`,
+				"📎 <b>Download File</b>\n\n" +
+					"Usage: <code>/file &lt;filepath&gt;</code>\n" +
+					"Or just <code>/file</code> to send files from the last response.\n\n" +
+					"No recent response to extract files from.",
 				{ parse_mode: "HTML" },
 			);
 			return;
@@ -812,8 +802,8 @@ export async function handleFile(ctx: Context): Promise<void> {
 
 		if (detected.length === 0) {
 			await ctx.reply(
-				`📎 No file paths found in <code>&lt;code&gt;</code> tags.\n\n` +
-					`Usage: <code>/file &lt;filepath&gt;</code>`,
+				"📎 No file paths found in <code>&lt;code&gt;</code> tags.\n\n" +
+					"Usage: <code>/file &lt;filepath&gt;</code>",
 				{ parse_mode: "HTML" },
 			);
 			return;
