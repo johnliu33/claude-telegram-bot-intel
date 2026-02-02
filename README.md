@@ -105,6 +105,8 @@ stop - Interrupt current query
 status - Check what Claude is doing
 model - Switch model (sonnet, opus, haiku)
 provider - Switch agent provider
+worktree - Create and enter a git worktree
+branch - Switch branch via worktree
 cost - Show token usage and estimated cost
 think - Force thinking mode
 plan - Toggle planning mode
@@ -210,6 +212,8 @@ The bot includes a built-in `ask_user` MCP server that lets Claude present optio
 | Command         | Description                                                |
 | --------------- | ---------------------------------------------------------- |
 | `/cd <path>`    | Change working directory                                   |
+| `/worktree`     | Create and enter a git worktree                            |
+| `/branch`       | Switch branch via worktree                                 |
 | `/file [path]`  | Download file (auto-detects from last response if no path) |
 | `/undo`         | Revert file changes to last checkpoint                     |
 | `/skill <name>` | Invoke a Claude Code skill (e.g., `/skill commit`)         |

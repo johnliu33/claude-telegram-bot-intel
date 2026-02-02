@@ -6,6 +6,7 @@ export { handleCallback } from "./callback";
 export {
 	handleBookmarks,
 	handleCd,
+	handleBranch,
 	handleCompact,
 	handleCost,
 	handleFile,
@@ -24,6 +25,7 @@ export {
 	handleStop,
 	handleThink,
 	handleUndo,
+	handleWorktree,
 } from "./commands";
 export { handleDocument } from "./document";
 export { handlePhoto } from "./photo";

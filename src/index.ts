@@ -15,6 +15,7 @@ import {
 } from "./config";
 import {
 	handleBookmarks,
+	handleBranch,
 	handleCallback,
 	handleCd,
 	handleCompact,
@@ -38,6 +39,7 @@ import {
 	handleText,
 	handleThink,
 	handleUndo,
+	handleWorktree,
 	handleVoice,
 } from "./handlers";
 import { session } from "./session";
@@ -65,6 +67,8 @@ bot.command("skill", handleSkill);
 bot.command("file", handleFile);
 bot.command("model", handleModel);
 bot.command("provider", handleProvider);
+bot.command("worktree", handleWorktree);
+bot.command("branch", handleBranch);
 bot.command("cost", handleCost);
 bot.command("think", handleThink);
 bot.command("plan", handlePlan);

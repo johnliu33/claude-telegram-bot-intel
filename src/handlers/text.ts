@@ -10,6 +10,7 @@ import { formatUserError } from "../errors";
 import { checkCommandSafety, isAuthorized, rateLimiter } from "../security";
 import { session } from "../session";
 import { auditLog, auditLogRateLimit, startTypingIndicator } from "../utils";
+import { createOrReuseWorktree } from "../worktree";
 import { createStatusCallback, StreamingState } from "./streaming";
 
 /**
@@ -62,6 +63,37 @@ export async function handleText(ctx: Context): Promise<void> {
 	// 1. Authorization check
 	if (!isAuthorized(userId, ALLOWED_USERS)) {
 		await ctx.reply("Unauthorized. Contact the bot owner for access.");
+		return;
+	}
+
+	// 1a. Pending worktree request
+	const pendingWorktree = session.peekWorktreeRequest(userId);
+	if (pendingWorktree) {
+		const trimmed = message.trim();
+		if (trimmed.toLowerCase() === "/cancel" || trimmed.toLowerCase() === "cancel") {
+			session.clearWorktreeRequest();
+			await ctx.reply("❌ Worktree request cancelled.");
+			return;
+		}
+
+		const result = await createOrReuseWorktree(session.workingDir, trimmed);
+		if (!result.success) {
+			await ctx.reply(
+				`❌ ${result.message}\n\nSend another branch name or /cancel.`,
+			);
+			return;
+		}
+
+		// Save current session before switching
+		session.flushSession();
+		session.setWorkingDir(result.path);
+		await session.kill();
+		session.clearWorktreeRequest();
+
+		await ctx.reply(
+			`✅ Switched to worktree:\n<code>${result.path}</code>\n\nBranch: <code>${result.branch}</code>`,
+			{ parse_mode: "HTML" },
+		);
 		return;
 	}
 

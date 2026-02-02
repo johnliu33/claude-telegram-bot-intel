@@ -17,6 +17,7 @@ import {
 import { isAuthorized, isPathAllowed } from "../security";
 import { session } from "../session";
 import { startTypingIndicator } from "../utils";
+import { listBranches } from "../worktree";
 
 /**
  * /start - Show welcome message and status.
@@ -57,6 +58,8 @@ Working directory: <code>${workDir}</code>
 
 <b>Files:</b>
 /cd - Change working directory
+/worktree - Create and enter a git worktree
+/branch - Switch to a branch worktree
 /file - Download a file
 /undo - Revert file changes
 /skill - Invoke Claude Code skill
@@ -484,6 +487,89 @@ export async function handleProvider(ctx: Context): Promise<void> {
 	await ctx.reply(success ? `🔀 ${message}` : `❌ ${message}`, {
 		parse_mode: "HTML",
 	});
+}
+
+/**
+ * /worktree - Create a git worktree and switch into it.
+ */
+export async function handleWorktree(ctx: Context): Promise<void> {
+	const userId = ctx.from?.id;
+	const chatId = ctx.chat?.id;
+
+	if (!isAuthorized(userId, ALLOWED_USERS)) {
+		await ctx.reply("Unauthorized.");
+		return;
+	}
+
+	if (!userId || !chatId) {
+		return;
+	}
+
+	if (session.isRunning) {
+		await ctx.reply("⚠️ A query is running. Use /stop first.");
+		return;
+	}
+
+	if (!session.requestWorktree(userId, chatId)) {
+		await ctx.reply(
+			"⚠️ Already waiting for a branch name. Send the branch name or /cancel.",
+		);
+		return;
+	}
+
+	// Save current session (if any) before switching
+	session.flushSession();
+
+	await ctx.reply(
+		"🌿 <b>Worktree Setup</b>\n\n" +
+			"Send the branch name to use (e.g. <code>feature/something-new</code>).\n" +
+			"Reply with /cancel to abort.",
+		{ parse_mode: "HTML" },
+	);
+}
+
+/**
+ * /branch - List branches and switch via worktree.
+ */
+export async function handleBranch(ctx: Context): Promise<void> {
+	const userId = ctx.from?.id;
+
+	if (!isAuthorized(userId, ALLOWED_USERS)) {
+		await ctx.reply("Unauthorized.");
+		return;
+	}
+
+	if (session.isRunning) {
+		await ctx.reply("⚠️ A query is running. Use /stop first.");
+		return;
+	}
+
+	const result = await listBranches(session.workingDir);
+	if (!result.success) {
+		await ctx.reply(`❌ ${result.message}`);
+		return;
+	}
+
+	if (result.branches.length === 0) {
+		await ctx.reply("⚠️ No branches found.");
+		return;
+	}
+
+	const keyboard = new InlineKeyboard();
+	for (const branch of result.branches) {
+		const encoded = Buffer.from(branch).toString("base64");
+		const label =
+			branch === result.current ? `✅ ${branch}` : `⚪️ ${branch}`;
+		if (encoded.length > 60) {
+			continue;
+		}
+		keyboard.text(label, `branch:switch:${encoded}`).row();
+	}
+
+	await ctx.reply(
+		`🌿 <b>Branches</b>\n\nCurrent: <b>${result.current ?? "detached"}</b>\n\nSelect a branch to switch:`,
+		{ parse_mode: "HTML", reply_markup: keyboard },
+	);
 }
 
 /**

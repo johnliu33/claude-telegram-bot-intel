@@ -157,6 +157,13 @@ class ClaudeSession {
 		timestamp: Date;
 	}> = [];
 
+	// Pending worktree request
+	private _pendingWorktreeRequest: {
+		userId: number;
+		chatId: number;
+		createdAt: Date;
+	} | null = null;
+
 	private provider: AgentProvider<SDKMessage, Options, Query>;
 	private providerId: AgentProviderId;
 
@@ -249,6 +256,33 @@ class ClaudeSession {
 
 	get workingDir(): string {
 		return this._workingDir;
+	}
+
+	requestWorktree(userId: number, chatId: number): boolean {
+		if (this._pendingWorktreeRequest) {
+			return false;
+		}
+		this._pendingWorktreeRequest = {
+			userId,
+			chatId,
+			createdAt: new Date(),
+		};
+		return true;
+	}
+
+	peekWorktreeRequest(
+		userId: number,
+	): { chatId: number; createdAt: Date } | null {
+		if (!this._pendingWorktreeRequest) return null;
+		if (this._pendingWorktreeRequest.userId !== userId) return null;
+		return {
+			chatId: this._pendingWorktreeRequest.chatId,
+			createdAt: this._pendingWorktreeRequest.createdAt,
+		};
+	}
+
+	clearWorktreeRequest(): void {
+		this._pendingWorktreeRequest = null;
 	}
 
 	get currentProvider(): AgentProviderId {

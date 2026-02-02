@@ -16,6 +16,7 @@ import {
 import { isAuthorized } from "../security";
 import { session } from "../session";
 import { auditLog, startTypingIndicator } from "../utils";
+import { createOrReuseWorktree } from "../worktree";
 import { createStatusCallback, StreamingState } from "./streaming";
 import { execShellCommand } from "./text";
 
@@ -84,6 +85,12 @@ export async function handleCallback(ctx: Context): Promise<void> {
 	// 2g. Handle provider callbacks
 	if (callbackData.startsWith("provider:")) {
 		await handleProviderCallback(ctx, callbackData);
+		return;
+	}
+
+	// 2h. Handle branch callbacks
+	if (callbackData.startsWith("branch:")) {
+		await handleBranchCallback(ctx, callbackData);
 		return;
 	}
 
@@ -638,6 +645,65 @@ async function handleProviderCallback(
 	}
 
 	await ctx.answerCallbackQuery({ text: `Switched to ${current}` });
+}
+
+/**
+ * Handle branch switch callbacks.
+ * Format: branch:switch:{base64}
+ */
+async function handleBranchCallback(
+	ctx: Context,
+	callbackData: string,
+): Promise<void> {
+	const prefix = "branch:switch:";
+	if (!callbackData.startsWith(prefix)) {
+		await ctx.answerCallbackQuery({ text: "Invalid branch action" });
+		return;
+	}
+
+	let branch = "";
+	try {
+		const encoded = callbackData.slice(prefix.length);
+		branch = Buffer.from(encoded, "base64").toString("utf-8");
+	} catch {
+		await ctx.answerCallbackQuery({ text: "Invalid branch data" });
+		return;
+	}
+
+	if (!branch) {
+		await ctx.answerCallbackQuery({ text: "Invalid branch" });
+		return;
+	}
+
+	if (session.isRunning) {
+		await ctx.answerCallbackQuery({ text: "Stop the current query first." });
+		return;
+	}
+
+	const result = await createOrReuseWorktree(session.workingDir, branch);
+	if (!result.success) {
+		await ctx.answerCallbackQuery({ text: result.message });
+		return;
+	}
+
+	// Save current session before switching
+	session.flushSession();
+	session.setWorkingDir(result.path);
+	await session.kill();
+
+	try {
+		await ctx.editMessageText(
+			`✅ Switched to worktree:\n<code>${result.path}</code>\n\nBranch: <code>${result.branch}</code>`,
+			{ parse_mode: "HTML" },
+		);
+	} catch {
+		await ctx.reply(
+			`✅ Switched to worktree:\n<code>${result.path}</code>\n\nBranch: <code>${result.branch}</code>`,
+			{ parse_mode: "HTML" },
+		);
+	}
+
+	await ctx.answerCallbackQuery({ text: `Switched to ${result.branch}` });
 }
 
 /**
