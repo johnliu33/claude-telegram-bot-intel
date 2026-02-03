@@ -6,14 +6,16 @@
 
 import { unlinkSync } from "node:fs";
 import { type Context, InlineKeyboard } from "grammy";
-import { addBookmark, removeBookmark } from "../bookmarks";
+import { addBookmark, removeBookmark, resolvePath } from "../bookmarks";
 import {
 	AGENT_PROVIDERS,
 	ALLOWED_USERS,
 	type AgentProviderId,
 	MESSAGE_EFFECTS,
 } from "../config";
-import { isAuthorized } from "../security";
+import { escapeHtml } from "../formatting";
+import { queryQueue } from "../query-queue";
+import { isAuthorized, isPathAllowed } from "../security";
 import { session } from "../session";
 import { auditLog, startTypingIndicator } from "../utils";
 import { logNonCriticalError } from "../utils/error-logging";
@@ -97,7 +99,7 @@ export async function handleCallback(ctx: Context): Promise<void> {
 
 	// 2h. Handle branch callbacks
 	if (callbackData.startsWith("branch:")) {
-		await handleBranchCallback(ctx, callbackData);
+		await handleBranchCallback(ctx, userId, chatId, callbackData);
 		return;
 	}
 
@@ -197,7 +199,7 @@ export async function handleCallback(ctx: Context): Promise<void> {
 	const statusCallback = createStatusCallback(ctx, state);
 
 	try {
-		const response = await session.sendMessageStreaming(
+		const response = await queryQueue.sendMessage(
 			message,
 			username,
 			userId,
@@ -372,7 +374,7 @@ async function handlePendingCallback(
 		const statusCallback = createStatusCallback(ctx, state);
 
 		try {
-			const response = await session.sendMessageStreaming(
+			const response = await queryQueue.sendMessage(
 				message,
 				username,
 				userId,
@@ -433,7 +435,7 @@ async function handleActionCallback(
 	const statusCallback = createStatusCallback(ctx, state);
 
 	try {
-		const response = await session.sendMessageStreaming(
+		const response = await queryQueue.sendMessage(
 			command,
 			username,
 			userId,
@@ -672,6 +674,8 @@ async function handleProviderCallback(
  */
 async function handleBranchCallback(
 	ctx: Context,
+	userId: number,
+	chatId: number,
 	callbackData: string,
 ): Promise<void> {
 	const prefix = "branch:switch:";
@@ -705,19 +709,35 @@ async function handleBranchCallback(
 		return;
 	}
 
+	if (!isPathAllowed(result.path)) {
+		await ctx.answerCallbackQuery({
+			text: "Worktree path is not in allowed directories.",
+		});
+		try {
+			await ctx.reply(
+				`❌ Worktree path is not in allowed directories:\n<code>${escapeHtml(result.path)}</code>\n\nUpdate ALLOWED_PATHS and try again.`,
+				{ parse_mode: "HTML" },
+			);
+		} catch (error) {
+			logNonCriticalError("branch allowlist reply", error);
+		}
+		return;
+	}
+
 	// Save current session before switching
 	session.flushSession();
 	session.setWorkingDir(result.path);
 	await session.kill();
+	session.clearWorktreeRequest(userId, chatId);
 
 	try {
 		await ctx.editMessageText(
-			`✅ Switched to worktree:\n<code>${result.path}</code>\n\nBranch: <code>${result.branch}</code>`,
+			`✅ Switched to worktree:\n<code>${escapeHtml(result.path)}</code>\n\nBranch: <code>${escapeHtml(result.branch)}</code>`,
 			{ parse_mode: "HTML" },
 		);
 	} catch {
 		await ctx.reply(
-			`✅ Switched to worktree:\n<code>${result.path}</code>\n\nBranch: <code>${result.branch}</code>`,
+			`✅ Switched to worktree:\n<code>${escapeHtml(result.path)}</code>\n\nBranch: <code>${escapeHtml(result.branch)}</code>`,
 			{ parse_mode: "HTML" },
 		);
 	}
@@ -747,17 +767,28 @@ async function handleSendFileCallback(
 		return;
 	}
 
+	const resolvedPath = resolvePath(filePath, session.workingDir);
+
 	// Check file exists
-	if (!existsSync(filePath)) {
+	if (!existsSync(resolvedPath)) {
 		await ctx.answerCallbackQuery({ text: "File not found" });
+		return;
+	}
+
+	if (!isPathAllowed(resolvedPath)) {
+		await ctx.answerCallbackQuery({ text: "Access denied" });
+		await ctx.reply(
+			`❌ Access denied: <code>${escapeHtml(resolvedPath)}</code>`,
+			{ parse_mode: "HTML" },
+		);
 		return;
 	}
 
 	// Send the file
 	try {
 		await ctx.answerCallbackQuery({ text: "Sending file..." });
-		const fileName = basename(filePath);
-		await ctx.replyWithDocument(new InputFile(filePath, fileName));
+		const fileName = basename(resolvedPath);
+		await ctx.replyWithDocument(new InputFile(resolvedPath, fileName));
 	} catch (error) {
 		console.error("Failed to send file:", error);
 		await ctx.reply(`❌ Failed to send file: ${String(error).slice(0, 100)}`);
@@ -816,6 +847,17 @@ async function handleMergeCallback(
 		return;
 	}
 
+	if (!isPathAllowed(info.mainWorktreePath)) {
+		await ctx.answerCallbackQuery({
+			text: "Main worktree path is not in allowed directories.",
+		});
+		await ctx.reply(
+			`❌ Main worktree path is not in allowed directories:\n<code>${escapeHtml(info.mainWorktreePath)}</code>\n\nUpdate ALLOWED_PATHS and try again.`,
+			{ parse_mode: "HTML" },
+		);
+		return;
+	}
+
 	// Switch to main worktree
 	session.flushSession();
 	session.setWorkingDir(info.mainWorktreePath);
@@ -823,7 +865,7 @@ async function handleMergeCallback(
 
 	try {
 		await ctx.editMessageText(
-			`🔀 Switched to <code>${info.mainBranch}</code> worktree.\n\nMerging <code>${branchToMerge}</code>...`,
+			`🔀 Switched to <code>${escapeHtml(info.mainBranch)}</code> worktree.\n\nMerging <code>${escapeHtml(branchToMerge)}</code>...`,
 			{ parse_mode: "HTML" },
 		);
 	} catch (error) {
@@ -849,7 +891,7 @@ If the merge is clean, just complete it. If there are conflicts, explain what yo
 	const chatId = ctx.chat?.id;
 
 	try {
-		const response = await session.sendMessageStreaming(
+		const response = await queryQueue.sendMessage(
 			mergePrompt,
 			username,
 			userId,
@@ -919,10 +961,23 @@ async function handleDiffCallback(
 
 			const { InputFile } = await import("grammy");
 			const diffBuffer = Buffer.from(result.fullDiff, "utf-8");
+			const MAX_DIFF_SIZE = 50 * 1024 * 1024;
+			if (diffBuffer.length > MAX_DIFF_SIZE) {
+				await ctx.answerCallbackQuery({ text: "Diff file too large" });
+				await ctx.reply("❌ Diff is too large to send as a file.");
+				return;
+			}
 			const filename = file
 				? `${file.replace(/\//g, "_")}.diff`
 				: "changes.diff";
-			await ctx.replyWithDocument(new InputFile(diffBuffer, filename));
+			try {
+				await ctx.replyWithDocument(new InputFile(diffBuffer, filename));
+			} catch (error) {
+				console.error("Failed to send diff file:", error);
+				await ctx.reply(
+					`❌ Failed to send diff file: ${String(error).slice(0, 100)}`,
+				);
+			}
 		} else {
 			// Send as HTML pre block
 			await ctx.answerCallbackQuery({ text: "Showing diff..." });
@@ -961,7 +1016,7 @@ async function handleDiffCallback(
 		const chatId = ctx.chat?.id;
 
 		try {
-			const response = await session.sendMessageStreaming(
+			const response = await queryQueue.sendMessage(
 				"/commit",
 				username,
 				userId,

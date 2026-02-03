@@ -27,6 +27,7 @@ import {
 import { botEvents } from "./events";
 import { formatToolStatus } from "./formatting";
 import { checkPendingAskUserRequests } from "./handlers/streaming";
+import { resolvePath } from "./bookmarks";
 import {
 	ClaudeProvider,
 	type ClaudeOptions as Options,
@@ -39,6 +40,10 @@ import { checkCommandSafety, isPathAllowed } from "./security";
 import type { SessionData, StatusCallback, TokenUsage } from "./types";
 
 const SESSION_VERSION = 1;
+const PENDING_WORKTREE_TIMEOUT_MS = Number.parseInt(
+	process.env.PENDING_WORKTREE_TIMEOUT_MS || String(10 * 60 * 1000),
+	10,
+);
 
 /**
  * Determine thinking token budget based on message keywords.
@@ -161,11 +166,14 @@ class ClaudeSession {
 	}> = [];
 
 	// Pending worktree request
-	private _pendingWorktreeRequest: {
-		userId: number;
-		chatId: number;
-		createdAt: Date;
-	} | null = null;
+	private _pendingWorktreeRequests = new Map<
+		string,
+		{
+			userId: number;
+			chatId: number;
+			createdAt: Date;
+		}
+	>();
 
 	private provider: AgentProvider<SDKMessage, Options, Query>;
 	private providerId: AgentProviderId;
@@ -262,30 +270,54 @@ class ClaudeSession {
 	}
 
 	requestWorktree(userId: number, chatId: number): boolean {
-		if (this._pendingWorktreeRequest) {
+		this.cleanupExpiredWorktreeRequests();
+		const key = this.getWorktreeKey(userId, chatId);
+		if (this._pendingWorktreeRequests.has(key)) {
 			return false;
 		}
-		this._pendingWorktreeRequest = {
+		this._pendingWorktreeRequests.set(key, {
 			userId,
 			chatId,
 			createdAt: new Date(),
-		};
+		});
 		return true;
 	}
 
 	peekWorktreeRequest(
 		userId: number,
+		chatId: number,
 	): { chatId: number; createdAt: Date } | null {
-		if (!this._pendingWorktreeRequest) return null;
-		if (this._pendingWorktreeRequest.userId !== userId) return null;
+		this.cleanupExpiredWorktreeRequests();
+		const key = this.getWorktreeKey(userId, chatId);
+		const request = this._pendingWorktreeRequests.get(key);
+		if (!request) return null;
 		return {
-			chatId: this._pendingWorktreeRequest.chatId,
-			createdAt: this._pendingWorktreeRequest.createdAt,
+			chatId: request.chatId,
+			createdAt: request.createdAt,
 		};
 	}
 
-	clearWorktreeRequest(): void {
-		this._pendingWorktreeRequest = null;
+	clearWorktreeRequest(userId?: number, chatId?: number): void {
+		if (userId !== undefined && chatId !== undefined) {
+			const key = this.getWorktreeKey(userId, chatId);
+			this._pendingWorktreeRequests.delete(key);
+			return;
+		}
+		this._pendingWorktreeRequests.clear();
+	}
+
+	private getWorktreeKey(userId: number, chatId: number): string {
+		return `${userId}:${chatId}`;
+	}
+
+	private cleanupExpiredWorktreeRequests(): void {
+		if (this._pendingWorktreeRequests.size === 0) return;
+		const now = Date.now();
+		for (const [key, request] of this._pendingWorktreeRequests) {
+			if (now - request.createdAt.getTime() > PENDING_WORKTREE_TIMEOUT_MS) {
+				this._pendingWorktreeRequests.delete(key);
+			}
+		}
 	}
 
 	get currentProvider(): AgentProviderId {
@@ -670,6 +702,31 @@ class ClaudeSession {
 								}
 							}
 
+							// Safety check for Codex file operations
+							if (toolName === "CodexFileChange") {
+								const changes = Array.isArray(toolInput.changes)
+									? toolInput.changes
+									: [];
+								for (const change of changes) {
+									const rawPath =
+										change && typeof change === "object"
+											? String((change as { path?: string }).path || "")
+											: "";
+									if (!rawPath) continue;
+									const resolvedPath = resolvePath(rawPath, this._workingDir);
+									if (!isPathAllowed(resolvedPath)) {
+										console.warn(
+											`BLOCKED: Codex file access outside allowed paths: ${resolvedPath}`,
+										);
+										await statusCallback(
+											"tool",
+											`Access denied: ${resolvedPath}`,
+										);
+										throw new Error(`File access blocked: ${resolvedPath}`);
+									}
+								}
+							}
+
 							// Segment ends when tool starts
 							if (currentSegmentText) {
 								await statusCallback(
@@ -837,6 +894,8 @@ class ClaudeSession {
 	async kill(): Promise<void> {
 		this.sessionId = null;
 		this.lastActivity = null;
+		this.clearPendingMessages();
+		this.clearWorktreeRequest();
 		// Reset usage totals
 		this.totalInputTokens = 0;
 		this.totalOutputTokens = 0;

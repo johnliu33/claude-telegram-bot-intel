@@ -19,6 +19,14 @@ describe("Logger", () => {
 		console.error = consoleErrorMock;
 	});
 
+	const getCall = (mockFn: ReturnType<typeof mock>, index = 0): string => {
+		const call = mockFn.mock.calls[index]?.[0];
+		if (call === undefined) {
+			throw new Error("Expected console call");
+		}
+		return String(call);
+	};
+
 	afterEach(() => {
 		consoleLogMock.mockRestore?.();
 		consoleWarnMock.mockRestore?.();
@@ -98,7 +106,7 @@ describe("Logger", () => {
 			const log = new Logger("info");
 			log.info("test message");
 
-			const call = consoleLogMock.mock.calls[0][0] as string;
+			const call = getCall(consoleLogMock);
 			// Check for ISO timestamp pattern: [YYYY-MM-DDTHH:MM:SS.sssZ]
 			expect(call).toMatch(/^\[\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}.\d{3}Z\]/);
 		});
@@ -107,23 +115,23 @@ describe("Logger", () => {
 			const log = new Logger("debug");
 
 			log.debug("test");
-			expect(consoleLogMock.mock.calls[0][0]).toContain("DEBUG");
+			expect(getCall(consoleLogMock, 0)).toContain("DEBUG");
 
 			log.info("test");
-			expect(consoleLogMock.mock.calls[1][0]).toContain("INFO");
+			expect(getCall(consoleLogMock, 1)).toContain("INFO");
 
 			log.warn("test");
-			expect(consoleWarnMock.mock.calls[0][0]).toContain("WARN");
+			expect(getCall(consoleWarnMock, 0)).toContain("WARN");
 
 			log.error("test");
-			expect(consoleErrorMock.mock.calls[0][0]).toContain("ERROR");
+			expect(getCall(consoleErrorMock, 0)).toContain("ERROR");
 		});
 
 		test("includes the message", () => {
 			const log = new Logger("info");
 			log.info("Hello, world!");
 
-			const call = consoleLogMock.mock.calls[0][0] as string;
+			const call = getCall(consoleLogMock);
 			expect(call).toContain("Hello, world!");
 		});
 	});
@@ -133,7 +141,7 @@ describe("Logger", () => {
 			const log = new Logger("info");
 			log.info("Request received", { method: "GET", path: "/api/users" });
 
-			const call = consoleLogMock.mock.calls[0][0] as string;
+			const call = getCall(consoleLogMock);
 			expect(call).toContain('{"method":"GET","path":"/api/users"}');
 		});
 
@@ -141,7 +149,7 @@ describe("Logger", () => {
 			const log = new Logger("info");
 			log.info("Simple message", {});
 
-			const call = consoleLogMock.mock.calls[0][0] as string;
+			const call = getCall(consoleLogMock);
 			expect(call).not.toContain("{}");
 		});
 
@@ -149,7 +157,7 @@ describe("Logger", () => {
 			const log = new Logger("info");
 			log.info("Simple message");
 
-			const call = consoleLogMock.mock.calls[0][0] as string;
+			const call = getCall(consoleLogMock);
 			expect(call).toContain("Simple message");
 			// Should not have trailing JSON
 			expect(call).toMatch(/Simple message$/);
@@ -162,7 +170,7 @@ describe("Logger", () => {
 				tags: ["admin", "active"],
 			});
 
-			const call = consoleLogMock.mock.calls[0][0] as string;
+			const call = getCall(consoleLogMock);
 			expect(call).toContain('"user":{"id":123,"name":"Alice"}');
 			expect(call).toContain('"tags":["admin","active"]');
 		});
@@ -171,7 +179,7 @@ describe("Logger", () => {
 			const log = new Logger("info");
 			log.info("Status", { count: 42, enabled: true, ratio: 3.14 });
 
-			const call = consoleLogMock.mock.calls[0][0] as string;
+			const call = getCall(consoleLogMock);
 			expect(call).toContain('"count":42');
 			expect(call).toContain('"enabled":true');
 			expect(call).toContain('"ratio":3.14');

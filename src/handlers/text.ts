@@ -7,7 +7,13 @@ import type { Context } from "grammy";
 import { InlineKeyboard } from "grammy";
 import { ALLOWED_USERS } from "../config";
 import { formatUserError } from "../errors";
-import { checkCommandSafety, isAuthorized, rateLimiter } from "../security";
+import { queryQueue } from "../query-queue";
+import {
+	checkCommandSafety,
+	isAuthorized,
+	isPathAllowed,
+	rateLimiter,
+} from "../security";
 import { session } from "../session";
 import { auditLog, auditLogRateLimit, startTypingIndicator } from "../utils";
 import { createOrReuseWorktree } from "../worktree";
@@ -71,14 +77,19 @@ export async function handleText(ctx: Context): Promise<void> {
 	}
 
 	// 1a. Pending worktree request
-	const pendingWorktree = session.peekWorktreeRequest(userId);
+	const pendingWorktree = session.peekWorktreeRequest(userId, chatId);
 	if (pendingWorktree) {
 		const trimmed = message.trim();
-		if (
-			trimmed.toLowerCase() === "/cancel" ||
-			trimmed.toLowerCase() === "cancel"
-		) {
-			session.clearWorktreeRequest();
+		const command = trimmed.split(/\s+/)[0]?.toLowerCase() || "";
+		const isCancel =
+			command === "/cancel" ||
+			command.startsWith("/cancel@") ||
+			command === "cancel";
+		if (command.startsWith("/") && !isCancel) {
+			return;
+		}
+		if (isCancel) {
+			session.clearWorktreeRequest(userId, chatId);
 			await ctx.reply("❌ Worktree request cancelled.");
 			return;
 		}
@@ -91,11 +102,20 @@ export async function handleText(ctx: Context): Promise<void> {
 			return;
 		}
 
+		if (!isPathAllowed(result.path)) {
+			session.clearWorktreeRequest(userId, chatId);
+			await ctx.reply(
+				`❌ Worktree path is not in allowed directories:\n<code>${result.path}</code>\n\nUpdate ALLOWED_PATHS and try again.`,
+				{ parse_mode: "HTML" },
+			);
+			return;
+		}
+
 		// Save current session before switching
 		session.flushSession();
 		session.setWorkingDir(result.path);
 		await session.kill();
-		session.clearWorktreeRequest();
+		session.clearWorktreeRequest(userId, chatId);
 
 		await ctx.reply(
 			`✅ Switched to worktree:\n<code>${result.path}</code>\n\nBranch: <code>${result.branch}</code>`,
@@ -193,7 +213,7 @@ export async function handleText(ctx: Context): Promise<void> {
 
 	for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
 		try {
-			const response = await session.sendMessageStreaming(
+			const response = await queryQueue.sendMessage(
 				message,
 				username,
 				userId,

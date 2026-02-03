@@ -9,6 +9,7 @@
 import { spawn } from "node:child_process";
 import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
+import { ALLOWED_PATHS, TEMP_PATHS } from "../config";
 import type { AgentProvider } from "./types";
 import type {
 	ClaudeOptions as Options,
@@ -151,6 +152,9 @@ export class CodexProvider implements AgentProvider<SDKMessage, Options, Query> 
 			stdio: ["pipe", "pipe", "pipe"],
 			env: { ...process.env },
 		});
+		if (!child.stdout) {
+			throw new Error("Codex worker stdout unavailable.");
+		}
 
 		const stderrChunks: string[] = [];
 		child.stderr.on("data", (chunk) => {
@@ -166,11 +170,22 @@ export class CodexProvider implements AgentProvider<SDKMessage, Options, Query> 
 			prompt,
 			threadId: options.resume ?? null,
 			cwd: options.cwd,
+			allowedPaths: ALLOWED_PATHS,
+			tempPaths: TEMP_PATHS,
 		};
 		child.stdin.write(`${JSON.stringify(request)}\n`);
 		child.stdin.end();
 
 		const rl = createInterface({ input: child.stdout, crlfDelay: Infinity });
+		let spawnError: Error | null = null;
+		child.once("error", (error) => {
+			spawnError = error;
+			try {
+				rl.close();
+			} catch {
+				// Ignore close errors
+			}
+		});
 		let threadId: string | null =
 			options.resume !== undefined ? String(options.resume) : null;
 		let finalResponse = "";
@@ -233,6 +248,9 @@ export class CodexProvider implements AgentProvider<SDKMessage, Options, Query> 
 
 		try {
 			for await (const line of rl) {
+				if (spawnError) {
+					throw spawnError;
+				}
 				if (!line.trim()) continue;
 				let event: CodexThreadEvent;
 				try {
@@ -376,6 +394,10 @@ export class CodexProvider implements AgentProvider<SDKMessage, Options, Query> 
 					type: "result",
 					session_id: threadId || undefined,
 				} as unknown as SDKMessage;
+			}
+
+			if (spawnError) {
+				throw spawnError;
 			}
 
 			const exitCode =

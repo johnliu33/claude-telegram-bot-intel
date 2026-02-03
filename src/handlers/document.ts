@@ -7,6 +7,7 @@
 
 import type { Context } from "grammy";
 import { ALLOWED_USERS, TEMP_DIR } from "../config";
+import { queryQueue } from "../query-queue";
 import { isAuthorized, rateLimiter } from "../security";
 import { session } from "../session";
 import { auditLog, auditLogRateLimit, startTypingIndicator } from "../utils";
@@ -302,7 +303,7 @@ async function processArchive(
 		const state = new StreamingState();
 		const statusCallback = createStatusCallback(ctx, state);
 
-		const response = await session.sendMessageStreaming(
+		const response = await queryQueue.sendMessage(
 			prompt,
 			username,
 			userId,
@@ -385,7 +386,7 @@ async function processDocuments(
 	const statusCallback = createStatusCallback(ctx, state);
 
 	try {
-		const response = await session.sendMessageStreaming(
+		const response = await queryQueue.sendMessage(
 			prompt,
 			username,
 			userId,

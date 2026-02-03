@@ -5,6 +5,12 @@
 import { spawn } from "node:child_process";
 import { mkdirSync } from "node:fs";
 import { join, resolve } from "node:path";
+import { isPathAllowed } from "./security";
+
+const GIT_COMMAND_TIMEOUT_MS = Number.parseInt(
+	process.env.GIT_COMMAND_TIMEOUT_MS || "20000",
+	10,
+);
 
 export type WorktreeResult =
 	| {
@@ -48,6 +54,8 @@ async function execGit(
 		const proc = spawn("git", args, { cwd });
 		let stdout = "";
 		let stderr = "";
+		let timedOut = false;
+		let timeout: ReturnType<typeof setTimeout> | null = null;
 
 		proc.stdout.on("data", (data) => {
 			stdout += data.toString();
@@ -58,12 +66,37 @@ async function execGit(
 		});
 
 		proc.on("close", (code) => {
+			if (timeout) {
+				clearTimeout(timeout);
+				timeout = null;
+			}
+			if (timedOut) {
+				resolve({
+					stdout,
+					stderr: stderr || `Git command timed out after ${GIT_COMMAND_TIMEOUT_MS}ms`,
+					exitCode: 124,
+				});
+				return;
+			}
 			resolve({ stdout, stderr, exitCode: code ?? 0 });
 		});
 
 		proc.on("error", (err) => {
+			if (timeout) {
+				clearTimeout(timeout);
+				timeout = null;
+			}
 			resolve({ stdout, stderr: err.message, exitCode: 1 });
 		});
+
+		timeout = setTimeout(() => {
+			timedOut = true;
+			try {
+				proc.kill("SIGTERM");
+			} catch {
+				// Ignore kill errors
+			}
+		}, GIT_COMMAND_TIMEOUT_MS);
 	});
 }
 
@@ -154,6 +187,28 @@ export async function listBranches(cwd: string): Promise<BranchListResult> {
 	return { success: true, branches, current, repoRoot };
 }
 
+export async function getWorkingTreeStatus(cwd: string): Promise<{
+	success: boolean;
+	dirty: boolean;
+	message?: string;
+}> {
+	const repoRoot = await getRepoRoot(cwd);
+	if (!repoRoot) {
+		return { success: false, dirty: false, message: "Not inside a git repository." };
+	}
+
+	const statusResult = await execGit(["status", "--porcelain"], repoRoot);
+	if (statusResult.exitCode !== 0) {
+		return {
+			success: false,
+			dirty: false,
+			message: statusResult.stderr.trim() || "Failed to check git status.",
+		};
+	}
+
+	return { success: true, dirty: statusResult.stdout.trim().length > 0 };
+}
+
 export type MergeInfo =
 	| {
 			success: true;
@@ -209,7 +264,13 @@ export async function getMergeInfo(cwd: string): Promise<MergeInfo> {
 
 	// Find or determine main worktree path
 	const worktreeMap = await getWorktreeMap(repoRoot);
-	const mainWorktreePath = worktreeMap.get(mainBranch) ?? repoRoot;
+	const mainWorktreePath = worktreeMap.get(mainBranch);
+	if (!mainWorktreePath) {
+		return {
+			success: false,
+			message: `Main branch (${mainBranch}) is not checked out in any worktree.`,
+		};
+	}
 
 	return {
 		success: true,
@@ -424,6 +485,12 @@ export async function createOrReuseWorktree(
 	const worktreeMap = await getWorktreeMap(repoRoot);
 	const existing = worktreeMap.get(trimmed);
 	if (existing) {
+		if (!isPathAllowed(existing)) {
+			return {
+				success: false,
+				message: `Existing worktree path is not in allowed directories: ${existing}`,
+			};
+		}
 		return {
 			success: true,
 			branch: trimmed,
@@ -442,9 +509,33 @@ export async function createOrReuseWorktree(
 	}
 
 	const baseDir = resolve(repoRoot, "..", "worktree");
-	mkdirSync(baseDir, { recursive: true });
+	if (!isPathAllowed(baseDir)) {
+		return {
+			success: false,
+			message:
+				`Worktree base directory is not in allowed paths: ${baseDir}. ` +
+				"Update ALLOWED_PATHS to include this directory.",
+		};
+	}
+	try {
+		mkdirSync(baseDir, { recursive: true });
+	} catch (error) {
+		const errMsg = error instanceof Error ? error.message : String(error);
+		return {
+			success: false,
+			message: `Failed to create worktree base directory: ${errMsg}`,
+		};
+	}
 
 	const targetPath = join(baseDir, folderName);
+	if (!isPathAllowed(targetPath)) {
+		return {
+			success: false,
+			message:
+				`Worktree path is not in allowed directories: ${targetPath}. ` +
+				"Update ALLOWED_PATHS to include this directory.",
+		};
+	}
 	const exists = await branchExists(repoRoot, trimmed);
 	const args = exists
 		? ["worktree", "add", targetPath, trimmed]

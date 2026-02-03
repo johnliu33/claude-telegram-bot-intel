@@ -1,4 +1,6 @@
 import { createInterface } from "node:readline";
+import { homedir } from "node:os";
+import { normalize, resolve } from "node:path";
 import process from "node:process";
 
 console.log = (...args) => {
@@ -25,6 +27,56 @@ rl.on("line", async (line) => {
 	handled = true;
 	try {
 		const request = JSON.parse(line);
+		const allowedPaths = Array.isArray(request.allowedPaths)
+			? request.allowedPaths
+			: String(process.env.CODEX_ALLOWED_PATHS || process.env.ALLOWED_PATHS || "")
+					.split(",")
+					.map((p) => p.trim())
+					.filter(Boolean);
+		const tempPaths = Array.isArray(request.tempPaths)
+			? request.tempPaths
+			: String(process.env.CODEX_TEMP_PATHS || "")
+					.split(",")
+					.map((p) => p.trim())
+					.filter(Boolean);
+
+		const isPathAllowed = (targetPath) => {
+			if (!targetPath) return false;
+			if (allowedPaths.length === 0 && tempPaths.length === 0) return true;
+			const expanded = String(targetPath).replace(
+				/^~(?=\/|$)/,
+				homedir(),
+			);
+			const normalized = normalize(expanded);
+			const resolved = resolve(normalized);
+
+			for (const tempPath of tempPaths) {
+				const tempResolved = resolve(tempPath);
+				if (
+					resolved === tempResolved ||
+					resolved.startsWith(`${tempResolved}/`)
+				) {
+					return true;
+				}
+			}
+
+			for (const allowed of allowedPaths) {
+				const allowedResolved = resolve(allowed);
+				if (
+					resolved === allowedResolved ||
+					resolved.startsWith(`${allowedResolved}/`)
+				) {
+					return true;
+				}
+			}
+			return false;
+		};
+
+		if (request.cwd && !isPathAllowed(request.cwd)) {
+			throw new Error(
+				`Working directory is not allowed: ${request.cwd}. Check ALLOWED_PATHS.`,
+			);
+		}
 		if (request.cwd) {
 			process.chdir(request.cwd);
 		}

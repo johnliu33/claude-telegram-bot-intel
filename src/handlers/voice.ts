@@ -5,6 +5,7 @@
 import { unlinkSync } from "node:fs";
 import type { Context } from "grammy";
 import { ALLOWED_USERS, TEMP_DIR, TRANSCRIPTION_AVAILABLE } from "../config";
+import { queryQueue } from "../query-queue";
 import { isAuthorized, rateLimiter } from "../security";
 import { session } from "../session";
 import {
@@ -99,7 +100,7 @@ export async function handleVoice(ctx: Context): Promise<void> {
 		const statusCallback = createStatusCallback(ctx, state);
 
 		// 10. Send to Claude
-		const claudeResponse = await session.sendMessageStreaming(
+		const claudeResponse = await queryQueue.sendMessage(
 			transcript,
 			username,
 			userId,

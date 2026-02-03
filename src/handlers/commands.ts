@@ -21,8 +21,15 @@ import {
 	getCombinedDiff,
 	getGitDiff,
 	getMergeInfo,
+	getWorkingTreeStatus,
 	listBranches,
 } from "../worktree";
+
+const CALLBACK_DATA_LIMIT = 64;
+const BRANCH_LIST_LIMIT = Number.parseInt(
+	process.env.BRANCH_LIST_LIMIT || "40",
+	10,
+);
 
 /**
  * /start - Show welcome message and status.
@@ -514,6 +521,27 @@ export async function handleWorktree(ctx: Context): Promise<void> {
 		return;
 	}
 
+	const status = await getWorkingTreeStatus(session.workingDir);
+	if (!status.success) {
+		await ctx.reply(`❌ ${status.message}`);
+		return;
+	}
+	if (status.dirty) {
+		await ctx.reply(
+			"⚠️ Working tree has uncommitted changes. Commit or stash before creating a worktree.",
+		);
+		return;
+	}
+
+	const pending = session.peekWorktreeRequest(userId, chatId);
+	if (pending) {
+		const age = Math.floor((Date.now() - pending.createdAt.getTime()) / 1000);
+		await ctx.reply(
+			`⚠️ Already waiting for a branch name (${age}s ago). Send the branch name or /cancel.`,
+		);
+		return;
+	}
+
 	if (!session.requestWorktree(userId, chatId)) {
 		await ctx.reply(
 			"⚠️ Already waiting for a branch name. Send the branch name or /cancel.",
@@ -548,6 +576,18 @@ export async function handleBranch(ctx: Context): Promise<void> {
 		return;
 	}
 
+	const status = await getWorkingTreeStatus(session.workingDir);
+	if (!status.success) {
+		await ctx.reply(`❌ ${status.message}`);
+		return;
+	}
+	if (status.dirty) {
+		await ctx.reply(
+			"⚠️ Working tree has uncommitted changes. Commit or stash before switching branches.",
+		);
+		return;
+	}
+
 	const result = await listBranches(session.workingDir);
 	if (!result.success) {
 		await ctx.reply(`❌ ${result.message}`);
@@ -560,19 +600,44 @@ export async function handleBranch(ctx: Context): Promise<void> {
 	}
 
 	const keyboard = new InlineKeyboard();
+	let omittedByLength = 0;
+	let omittedByLimit = 0;
+	let included = 0;
 	for (const branch of result.branches) {
-		const encoded = Buffer.from(branch).toString("base64");
-		const label = branch === result.current ? `✅ ${branch}` : `⚪️ ${branch}`;
-		if (encoded.length > 60) {
+		if (included >= BRANCH_LIST_LIMIT) {
+			omittedByLimit++;
 			continue;
 		}
+		const encoded = Buffer.from(branch).toString("base64");
+		const callbackData = `branch:switch:${encoded}`;
+		if (callbackData.length > CALLBACK_DATA_LIMIT) {
+			omittedByLength++;
+			continue;
+		}
+		const label = branch === result.current ? `✅ ${branch}` : `⚪️ ${branch}`;
 		keyboard.text(label, `branch:switch:${encoded}`).row();
+		included++;
 	}
 
-	await ctx.reply(
-		`🌿 <b>Branches</b>\n\nCurrent: <b>${result.current ?? "detached"}</b>\n\nSelect a branch to switch:`,
-		{ parse_mode: "HTML", reply_markup: keyboard },
-	);
+	let message = `🌿 <b>Branches</b>\n\nCurrent: <b>${escapeHtml(result.current ?? "detached")}</b>\n\nSelect a branch to switch:`;
+	if (omittedByLength > 0) {
+		message += `\n\n<i>Omitted ${omittedByLength} branch${omittedByLength === 1 ? "" : "es"} due to callback length limits.</i>`;
+	}
+	if (omittedByLimit > 0) {
+		message += `\n<i>Showing first ${included} of ${result.branches.length} branches.</i>`;
+	}
+
+	if (included === 0) {
+		await ctx.reply(
+			"⚠️ No branches fit Telegram callback limits. Try shorter branch names.",
+		);
+		return;
+	}
+
+	await ctx.reply(message, {
+		parse_mode: "HTML",
+		reply_markup: keyboard,
+	});
 }
 
 /**
@@ -592,6 +657,18 @@ export async function handleMerge(ctx: Context): Promise<void> {
 		return;
 	}
 
+	const status = await getWorkingTreeStatus(session.workingDir);
+	if (!status.success) {
+		await ctx.reply(`❌ ${status.message}`);
+		return;
+	}
+	if (status.dirty) {
+		await ctx.reply(
+			"⚠️ Working tree has uncommitted changes. Commit or stash before merging.",
+		);
+		return;
+	}
+
 	const result = await getMergeInfo(session.workingDir);
 	if (!result.success) {
 		await ctx.reply(`❌ ${result.message}`);
@@ -600,13 +677,20 @@ export async function handleMerge(ctx: Context): Promise<void> {
 
 	const { currentBranch, mainBranch } = result;
 	const encodedBranch = Buffer.from(currentBranch).toString("base64");
+	const callbackData = `merge:confirm:${encodedBranch}`;
+	if (callbackData.length > CALLBACK_DATA_LIMIT) {
+		await ctx.reply(
+			"❌ Branch name is too long for Telegram callbacks. Try a shorter branch name.",
+		);
+		return;
+	}
 
 	const keyboard = new InlineKeyboard()
-		.text("Merge", `merge:confirm:${encodedBranch}`)
+		.text("Merge", callbackData)
 		.text("Cancel", "merge:cancel");
 
 	await ctx.reply(
-		`🔀 <b>Merge Branch</b>\n\nMerge <code>${currentBranch}</code> → <code>${mainBranch}</code>\n\nThis will:\n1. Switch to <code>${mainBranch}</code> worktree\n2. Ask Claude to merge and resolve any conflicts`,
+		`🔀 <b>Merge Branch</b>\n\nMerge <code>${escapeHtml(currentBranch)}</code> → <code>${escapeHtml(mainBranch)}</code>\n\nThis will:\n1. Switch to <code>${escapeHtml(mainBranch)}</code> worktree\n2. Ask Claude to merge and resolve any conflicts`,
 		{ parse_mode: "HTML", reply_markup: keyboard },
 	);
 }
@@ -1140,7 +1224,13 @@ export async function handleDiff(ctx: Context): Promise<void> {
 	const opts = isStaged ? "staged" : file ? `file:${file}` : "all";
 	const encodedOpts = Buffer.from(opts).toString("base64");
 
-	keyboard.text("📄 View Diff", `diff:view:${encodedOpts}`);
+	const diffCallback = `diff:view:${encodedOpts}`;
+	if (diffCallback.length <= CALLBACK_DATA_LIMIT) {
+		keyboard.text("📄 View Diff", diffCallback);
+	} else {
+		message +=
+			"\n<i>Diff view omitted: file path too long for Telegram callbacks.</i>";
+	}
 	keyboard.text("💾 Commit", "diff:commit");
 	keyboard.row();
 	keyboard.text("⚠️ Revert All", "diff:revert");
