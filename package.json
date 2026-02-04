@@ -48,6 +48,7 @@
 		"@grammyjs/runner": "^2.0.3",
 		"@modelcontextprotocol/sdk": "^1.25.1",
 		"@openai/codex-sdk": "^0.93.0",
+		"dotenv": "^17.2.3",
 		"grammy": "^1.38.4",
 		"openai": "^6.15.0",
 		"shell-quote": "^1.8.3",

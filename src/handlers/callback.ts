@@ -4,7 +4,7 @@
  * Handles inline keyboard button presses (ask_user MCP integration, bookmarks, file sending).
  */
 
-import { unlinkSync } from "node:fs";
+import { existsSync, readFileSync, unlinkSync } from "node:fs";
 import { type Context, InlineKeyboard } from "grammy";
 import { addBookmark, removeBookmark, resolvePath } from "../bookmarks";
 import {
@@ -12,6 +12,7 @@ import {
 	type AgentProviderId,
 	ALLOWED_USERS,
 	MESSAGE_EFFECTS,
+	TEMP_DIR,
 } from "../config";
 import { formatUserError } from "../errors";
 import { escapeHtml } from "../formatting";
@@ -1160,12 +1161,22 @@ async function handleVoiceCallback(
 	}
 
 	if (action === "confirm" || action === "edit") {
-		const encodedData = parts.slice(2).join(":");
+		const transcriptId = parts.slice(2).join(":");
 		let transcript = "";
 
 		try {
-			const data = JSON.parse(Buffer.from(encodedData, "base64").toString());
-			transcript = data.transcript || "";
+			// Read transcript from temp file (stored by voice handler)
+			const transcriptFile = `${TEMP_DIR}/transcript_${transcriptId}.json`;
+			if (existsSync(transcriptFile)) {
+				const data = JSON.parse(readFileSync(transcriptFile, "utf-8"));
+				transcript = data.transcript || "";
+				// Clean up the file after reading
+				try { unlinkSync(transcriptFile); } catch { /* ignore */ }
+			} else {
+				// Fallback: try legacy base64 format for backwards compatibility
+				const data = JSON.parse(Buffer.from(transcriptId, "base64").toString());
+				transcript = data.transcript || "";
+			}
 		} catch {
 			await ctx.answerCallbackQuery({ text: "無效的資料" });
 			return;

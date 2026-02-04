@@ -4,6 +4,8 @@
  * Audit logging, voice transcription, typing indicator.
  */
 
+import { createReadStream } from "node:fs";
+import https from "node:https";
 import type { Context } from "grammy";
 import type { Chat } from "grammy/types";
 import OpenAI from "openai";
@@ -21,9 +23,18 @@ import type { AuditEvent } from "./types";
 
 // ============== OpenAI Client ==============
 
+// Create HTTPS agent that forces IPv4 (fixes ETIMEDOUT on some systems)
+const ipv4Agent = new https.Agent({
+	family: 4,
+	keepAlive: true,
+});
+
 let openaiClient: OpenAI | null = null;
 if (OPENAI_API_KEY && TRANSCRIPTION_AVAILABLE) {
-	openaiClient = new OpenAI({ apiKey: OPENAI_API_KEY });
+	openaiClient = new OpenAI({
+		apiKey: OPENAI_API_KEY,
+		httpAgent: ipv4Agent,
+	});
 }
 
 // ============== Audit Logging ==============
@@ -213,10 +224,11 @@ export async function transcribeVoice(
 	}
 
 	try {
-		const file = Bun.file(filePath);
+		// Use Node.js createReadStream for OpenAI SDK compatibility
+		const fileStream = createReadStream(filePath);
 		const transcript = await openaiClient.audio.transcriptions.create({
 			model: "gpt-4o-transcribe",
-			file: file,
+			file: fileStream,
 			prompt: TRANSCRIPTION_PROMPT,
 		});
 		return transcript.text;

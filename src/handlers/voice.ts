@@ -2,9 +2,41 @@
  * Voice message handler for Claude Telegram Bot.
  */
 
-import { unlinkSync } from "node:fs";
+import https from "node:https";
+import { unlinkSync, writeFileSync } from "node:fs";
 import type { Context } from "grammy";
 import { InlineKeyboard } from "grammy";
+
+/**
+ * Download a file using HTTPS with IPv4 forced.
+ * This is needed because Node.js fetch may timeout on IPv6.
+ */
+async function downloadFileIPv4(url: string): Promise<Buffer> {
+	return new Promise((resolve, reject) => {
+		const parsedUrl = new URL(url);
+		const options = {
+			hostname: parsedUrl.hostname,
+			port: 443,
+			path: parsedUrl.pathname + parsedUrl.search,
+			method: "GET",
+			family: 4, // Force IPv4
+		};
+
+		const req = https.request(options, (res) => {
+			const chunks: Buffer[] = [];
+			res.on("data", (chunk) => chunks.push(chunk));
+			res.on("end", () => resolve(Buffer.concat(chunks)));
+			res.on("error", reject);
+		});
+
+		req.on("error", reject);
+		req.setTimeout(30000, () => {
+			req.destroy();
+			reject(new Error("Download timeout"));
+		});
+		req.end();
+	});
+}
 import {
 	ALLOWED_USERS,
 	MESSAGE_EFFECTS,
@@ -71,11 +103,9 @@ export async function handleVoice(ctx: Context): Promise<void> {
 		const timestamp = Date.now();
 		voicePath = `${TEMP_DIR}/voice_${timestamp}.ogg`;
 
-		// Download the file
-		const downloadRes = await fetch(
-			`https://api.telegram.org/file/bot${ctx.api.token}/${file.file_path}`,
-		);
-		const buffer = await downloadRes.arrayBuffer();
+		// Download the file using IPv4
+		const downloadUrl = `https://api.telegram.org/file/bot${ctx.api.token}/${file.file_path}`;
+		const buffer = await downloadFileIPv4(downloadUrl);
 		await Bun.write(voicePath, buffer);
 
 		// 7. Transcribe
@@ -91,16 +121,16 @@ export async function handleVoice(ctx: Context): Promise<void> {
 			return;
 		}
 
-		// 8. Store transcript for later use and show with confirmation buttons
-		const transcriptData = Buffer.from(
-			JSON.stringify({ transcript, userId, chatId }),
-		).toString("base64");
+		// 8. Store transcript in temp file (Telegram callback_data has 64 byte limit)
+		const transcriptId = `${userId}_${Date.now()}`;
+		const transcriptFile = `${TEMP_DIR}/transcript_${transcriptId}.json`;
+		writeFileSync(transcriptFile, JSON.stringify({ transcript, userId, chatId }));
 
 		const keyboard = new InlineKeyboard()
-			.text("✅ 確定", `voice:confirm:${transcriptData}`)
+			.text("✅ 確定", `voice:confirm:${transcriptId}`)
 			.text("❌ 取消", "voice:cancel")
 			.row()
-			.text("✏️ 編輯補充", `voice:edit:${transcriptData}`);
+			.text("✏️ 編輯補充", `voice:edit:${transcriptId}`);
 
 		await ctx.api.deleteMessage(chatId, statusMsg.message_id);
 		await ctx.reply(`🎤 語音轉錄完成：\n\n"${transcript}"\n\n請選擇操作：`, {

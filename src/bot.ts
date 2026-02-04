@@ -6,6 +6,7 @@
  */
 
 import { existsSync, readFileSync } from "node:fs";
+import https from "node:https";
 import { run, sequentialize } from "@grammyjs/runner";
 import { Bot } from "grammy";
 import {
@@ -14,6 +15,12 @@ import {
 	TELEGRAM_TOKEN,
 	WORKING_DIR,
 } from "./config";
+
+// Create HTTPS agent that forces IPv4 (fixes ETIMEDOUT on some systems)
+const ipv4Agent = new https.Agent({
+	family: 4,
+	keepAlive: true,
+});
 import {
 	handleBookmarks,
 	handleBranch,
@@ -43,8 +50,14 @@ import {
 } from "./handlers";
 import { safeUnlink } from "./utils/temp-cleanup";
 
-// Create bot instance
-const bot = new Bot(TELEGRAM_TOKEN);
+// Create bot instance with IPv4-only agent
+const bot = new Bot(TELEGRAM_TOKEN, {
+	client: {
+		baseFetchConfig: {
+			agent: ipv4Agent,
+		},
+	},
+});
 
 // Sequentialize non-command messages per user (prevents race conditions)
 // Commands bypass sequentialization so they work immediately

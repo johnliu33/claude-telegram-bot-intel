@@ -4,6 +4,8 @@
  * All environment variables, paths, constants, and safety settings.
  */
 
+import { execSync } from "node:child_process";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, resolve } from "node:path";
 import type { McpServerConfig } from "./types";
@@ -66,9 +68,13 @@ function findClaudeCli(): string {
 	const envPath = process.env.CLAUDE_CLI_PATH;
 	if (envPath) return envPath;
 
-	// Try to find claude in PATH using Bun.which
-	const whichResult = Bun.which("claude");
-	if (whichResult) return whichResult;
+	// Try to find claude in PATH using which command (Node.js compatible)
+	try {
+		const whichResult = execSync("which claude", { encoding: "utf-8" }).trim();
+		if (whichResult) return whichResult;
+	} catch {
+		// claude not found in PATH
+	}
 
 	// Final fallback
 	return "/usr/local/bin/claude";
@@ -347,9 +353,15 @@ export const TEMP_DIR = `${INSTANCE_TEMP_DIR}/downloads`;
 // Temp paths that are always allowed for bot operations
 export const TEMP_PATHS = ["/tmp/", "/private/tmp/", "/var/folders/"];
 
-// Ensure temp directories exist
-await Bun.write(`${INSTANCE_TEMP_DIR}/.keep`, "");
-await Bun.write(`${TEMP_DIR}/.keep`, "");
+// Ensure temp directories exist (Node.js compatible)
+if (!existsSync(INSTANCE_TEMP_DIR)) {
+	mkdirSync(INSTANCE_TEMP_DIR, { recursive: true });
+}
+if (!existsSync(TEMP_DIR)) {
+	mkdirSync(TEMP_DIR, { recursive: true });
+}
+writeFileSync(`${INSTANCE_TEMP_DIR}/.keep`, "");
+writeFileSync(`${TEMP_DIR}/.keep`, "");
 
 // ============== Validation ==============
 

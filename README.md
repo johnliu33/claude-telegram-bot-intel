@@ -33,7 +33,7 @@ Claude Telegram Bot connects Telegram → Claude Code and streams responses (inc
 
 ### Prerequisites
 
-- **Bun 1.0+**
+- **Bun 1.0+** or **Node.js 18+** (with tsx)
 - **Telegram Bot Token** from @BotFather
 - **Claude Code CLI** (recommended, for SDK CLI auth)
 - **OpenAI API Key** (optional, for voice transcription)
@@ -66,6 +66,35 @@ cp .env.example .env
 
 bun install
 bun run start
+```
+
+### Run with Node.js (for systems without Bun support)
+
+If Bun is not available on your system (e.g., older Intel Macs), you can run with Node.js:
+
+```bash
+npm install
+npm install -g tsx
+tsx src/node-entry.ts
+```
+
+### Run with pm2 (background process)
+
+For running as a background service:
+
+```bash
+# Start with pm2
+pm2 start ecosystem.config.cjs
+
+# View logs
+pm2 logs ctb-code
+
+# Restart
+pm2 restart ctb-code
+
+# Save for auto-start on boot
+pm2 save
+pm2 startup
 ```
 
 ### Configure Environment
