@@ -486,13 +486,9 @@ export async function handleRetry(ctx: Context): Promise<void> {
 	const { handleText } = await import("./text");
 
 	// Create a modified context with the last message
-	const fakeCtx = {
-		...ctx,
-		message: {
-			...ctx.message,
-			text: message,
-		},
-	} as Context;
+	const fakeCtx = Object.create(ctx, {
+		message: { value: { ...ctx.message, text: message }, configurable: true, enumerable: true },
+	}) as Context;
 
 	await handleText(fakeCtx);
 }
@@ -510,7 +506,7 @@ export async function handleSkill(ctx: Context): Promise<void> {
 
 	// Get the skill name and args from command
 	const text = ctx.message?.text || "";
-	const match = text.match(/^\/skill\s+(\S+)(?:\s+(.*))?$/);
+	const match = text.match(/^\/skill(?:@\S+)?\s+(\S+)(?:\s+(.*))?$/);
 
 	if (!match) {
 		await ctx.reply(
@@ -535,13 +531,9 @@ export async function handleSkill(ctx: Context): Promise<void> {
 
 	// Send to Claude via handleText
 	const { handleText } = await import("./text");
-	const fakeCtx = {
-		...ctx,
-		message: {
-			...ctx.message,
-			text: skillCommand,
-		},
-	} as Context;
+	const fakeCtx = Object.create(ctx, {
+		message: { value: { ...ctx.message, text: skillCommand }, configurable: true, enumerable: true },
+	}) as Context;
 
 	await handleText(fakeCtx);
 }
@@ -941,13 +933,9 @@ export async function handleCompact(ctx: Context): Promise<void> {
 
 	// Send "/compact" to Claude SDK to trigger manual compaction
 	const { handleText } = await import("./text");
-	const fakeCtx = {
-		...ctx,
-		message: {
-			...ctx.message,
-			text: "/compact",
-		},
-	} as Context;
+	const fakeCtx = Object.create(ctx, {
+		message: { value: { ...ctx.message, text: "/compact" }, configurable: true, enumerable: true },
+	}) as Context;
 
 	await handleText(fakeCtx);
 }
