@@ -115,7 +115,7 @@ class ClaudeSession {
 	lastBotResponse: string | null = null;
 
 	// Model and mode settings
-	currentModel: "sonnet" | "opus" | "haiku" = "sonnet";
+	currentModel: "sonnet" | "opus" | "haiku" = "opus";
 	forceThinking: number | null = null; // Tokens for next message, then resets
 	planMode = false;
 
